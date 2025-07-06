@@ -1,5 +1,8 @@
 # MagnetLink Optimizer Pro - Git Ignore File
 
+# Development documentation (local only)
+docs/
+
 # Rust
 /target/
 **/target/
