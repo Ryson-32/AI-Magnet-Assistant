@@ -1,0 +1,26 @@
+{
+  "name": "magnetlink-optimizer-pro-ui",
+  "private": true,
+  "version": "0.1.0",
+  "type": "module",
+  "description": "MagnetLink Optimizer Pro - Intelligent Magnet Link Search and Optimization Tool",
+  "scripts": {
+    "dev": "vite",
+    "build": "vue-tsc --noEmit && vite build",
+    "preview": "vite preview",
+    "tauri": "tauri"
+  },
+  "dependencies": {
+    "@tauri-apps/api": "^2",
+    "@tauri-apps/plugin-opener": "^2",
+    "tauri-plugin-store-api": "^0.0.0",
+    "vue": "^3.5.13"
+  },
+  "devDependencies": {
+    "@tauri-apps/cli": "^2",
+    "@vitejs/plugin-vue": "^5.2.1",
+    "typescript": "~5.6.2",
+    "vite": "^6.0.3",
+    "vue-tsc": "^2.1.10"
+  }
+}
