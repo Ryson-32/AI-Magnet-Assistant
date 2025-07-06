@@ -56,8 +56,12 @@
           <button @click="copyMagnetLink(favorite.magnet_link)" class="copy-btn" title="Copy magnet link">
             📋
           </button>
-          <button @click="removeFavorite(favorite.id)" class="remove-btn" title="Remove from favorites">
-            🗑️
+          <button
+            @click="removeFavorite(favorite.id)"
+            :class="['remove-btn', { 'confirm-delete': favorite.id === pendingDeleteId }]"
+            :title="favorite.id === pendingDeleteId ? 'Confirm deletion' : 'Remove from favorites'"
+          >
+            {{ favorite.id === pendingDeleteId ? '❓' : '🗑️' }}
           </button>
         </div>
       </div>
@@ -66,7 +70,7 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, inject, watch, Ref } from 'vue';
 import { invoke } from "@tauri-apps/api/core";
 
 interface FavoriteItem {
@@ -82,6 +86,16 @@ const favorites = ref<FavoriteItem[]>([]);
 const displayedFavorites = ref<FavoriteItem[]>([]);
 const searchQuery = ref("");
 const loading = ref(false);
+const pendingDeleteId = ref<string | null>(null);
+const deleteTimeout = ref<any>(null);
+
+const favoritesTimestamp = inject<Ref<number>>('favoritesTimestamp');
+
+if (favoritesTimestamp) {
+  watch(favoritesTimestamp, () => {
+    loadFavorites();
+  });
+}
 
 onMounted(() => {
   loadFavorites();
@@ -114,16 +128,22 @@ function searchFavorites() {
 }
 
 async function removeFavorite(id: string) {
-  if (!confirm("Are you sure you want to remove this favorite?")) {
-    return;
-  }
+  clearTimeout(deleteTimeout.value);
 
-  try {
-    await invoke("remove_from_favorites", { id });
-    await loadFavorites(); // Reload the list
-  } catch (error) {
-    console.error("Failed to remove favorite:", error);
-    alert(`Failed to remove favorite: ${error}`);
+  if (pendingDeleteId.value === id) {
+    try {
+      await invoke("remove_from_favorites", { id });
+      await loadFavorites(); // Reload the list
+      pendingDeleteId.value = null;
+    } catch (error) {
+      console.error("Failed to remove favorite:", error);
+      alert(`Failed to remove favorite: ${error}`);
+    }
+  } else {
+    pendingDeleteId.value = id;
+    deleteTimeout.value = setTimeout(() => {
+      pendingDeleteId.value = null;
+    }, 3500);
   }
 }
 
@@ -364,5 +384,14 @@ function formatDate(dateString: string): string {
 
 .remove-btn:hover {
   background: #feb2b2;
+}
+
+.remove-btn.confirm-delete {
+  background-color: #fbd38d; /* A yellow/orange color for confirmation */
+  color: #9c4221;
+}
+
+.remove-btn.confirm-delete:hover {
+  background-color: #f6ad55;
 }
 </style>
