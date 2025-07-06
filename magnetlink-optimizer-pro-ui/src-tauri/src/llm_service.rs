@@ -1,11 +1,11 @@
 // src-tauri/src/llm_service.rs
 
-use serde::{Deserialize, Serialize};
-use reqwest::Client;
-use async_trait::async_trait;
 use anyhow::Result;
+use async_trait::async_trait;
+use reqwest::Client;
+use serde::{Deserialize, Serialize};
 
-// --- 1. 定义与Gemini API交互所需的数据结构 ---
+// --- 0. 公共配置 ---
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
 pub struct LlmConfig {
@@ -15,40 +15,68 @@ pub struct LlmConfig {
     pub model: String,
 }
 
-// 定义我们期望从Gemini收到的JSON对象的结构
-#[derive(Serialize, Deserialize, Debug)]
-pub struct AnalysisResult {
-    pub purity_score: u8,
-    pub content_type: String,
-    pub video_quality: String,
-    pub has_subtitles: bool,
-    pub tags: Vec<String>,
-}
+// --- 1. 第一阶段：从HTML中提取基础信息 ---
 
-// 批量分析结果
-#[derive(Serialize, Deserialize, Debug)]
-pub struct BatchAnalysisResult {
-    pub results: Vec<SingleAnalysisResult>,
-}
-
-#[derive(Serialize, Deserialize, Debug)]
-pub struct SingleAnalysisResult {
+/// 第一阶段：从HTML中提取的单个原始、未经处理的磁力链接信息
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct ExtractedBasicInfo {
     pub title: String,
-    pub purity_score: u8,
-    pub content_type: String,
-    pub video_quality: String,
-    pub tags: Vec<String>,
+    pub magnet_link: String,
+    pub file_size: Option<String>,
 }
 
-// LLM客户端trait定义
+/// 第一阶段：批量提取结果
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BatchExtractBasicInfoResult {
+    pub results: Vec<ExtractedBasicInfo>,
+}
+
+// --- 2. 第二阶段：分析分数和标签 ---
+
+/// 第二阶段：对单个磁力链接的文件列表进行详细分析后的最终结果
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct DetailedAnalysisResult {
+    pub title: String,           // 精简后的标题
+    pub purity_score: u8,        // 纯净度分数 (由LLM计算)
+    pub tags: Vec<String>,       // 智能标签
+    pub magnet_link: String,     // 原始磁力链接 (从第一阶段透传)
+    pub file_size: Option<String>, // 原始文件大小 (从第一阶段透传)
+    pub file_list: Vec<String>, // 文件列表
+}
+
+/// LLM为第二阶段分析返回的原始数据结构
+#[derive(Serialize, Deserialize, Debug)]
+struct LlmFileAnalysis {
+    pub original_filename: String, // 原始文件名，用于匹配
+    pub cleaned_title: String,     // 清理后的标题 (仅对主媒体文件有意义)
+    pub tags: Vec<String>,         // LLM生成的标签 (仅对主媒体文件有意义)
+    pub purity_score: u8,          // LLM计算的纯净度分数 (仅对主媒体文件有意义)
+}
+
+/// 第二阶段LLM返回的批量结果
+#[derive(Serialize, Deserialize, Debug)]
+struct BatchLlmFileAnalysis {
+    pub results: Vec<LlmFileAnalysis>,
+}
+
+// --- 3. LLM客户端定义 ---
+
 #[async_trait]
 pub trait LlmClient: Send + Sync {
-    async fn evaluate_ad(&self, title: &str) -> Result<f32>;
-    async fn enrich_result(&self, title: &str) -> Result<Vec<String>>;
-    async fn batch_analyze(&self, titles: &[String]) -> Result<BatchAnalysisResult>;
+    /// 第一阶段：从HTML页面批量提取基础、原始的磁力链接信息
+    async fn batch_extract_basic_info_from_html(
+        &self,
+        html_content: &str,
+    ) -> Result<BatchExtractBasicInfoResult>;
+
+    /// 第二阶段：根据文件列表批量分析分数和标签
+    async fn batch_analyze_scores_and_tags(
+        &self,
+        original_title: &str,
+        file_list: &[String],
+    ) -> Result<(String, u8, Vec<String>)>;
 }
 
-// Gemini客户端实现
 pub struct GeminiClient {
     config: LlmConfig,
     client: Client,
@@ -63,29 +91,25 @@ impl GeminiClient {
 
 #[async_trait]
 impl LlmClient for GeminiClient {
-    async fn evaluate_ad(&self, title: &str) -> Result<f32> {
-        // 单个广告评估的简化实现
-        let analysis = self.analyze_single_resource(title.to_string(), vec![]).await
-            .map_err(|e| anyhow::anyhow!("Failed to evaluate ad: {}", e))?;
-
-        // 将purity_score转换为ad_score (分数越高表示越纯净，ad_score越低)
-        let ad_score = (100 - analysis.purity_score) as f32 / 100.0;
-        Ok(ad_score)
+    async fn batch_extract_basic_info_from_html(
+        &self,
+        html_content: &str,
+    ) -> Result<BatchExtractBasicInfoResult> {
+        self.batch_extract_basic_info_impl(html_content).await
     }
 
-    async fn enrich_result(&self, title: &str) -> Result<Vec<String>> {
-        let analysis = self.analyze_single_resource(title.to_string(), vec![]).await
-            .map_err(|e| anyhow::anyhow!("Failed to enrich result: {}", e))?;
-        Ok(analysis.tags)
-    }
-
-    async fn batch_analyze(&self, titles: &[String]) -> Result<BatchAnalysisResult> {
-        self.batch_analyze_resources(titles.to_vec()).await
-            .map_err(|e| anyhow::anyhow!("Batch analysis failed: {}", e))
+    async fn batch_analyze_scores_and_tags(
+        &self,
+        original_title: &str,
+        file_list: &[String],
+    ) -> Result<(String, u8, Vec<String>)> {
+        self.batch_analyze_scores_and_tags_impl(original_title, file_list)
+            .await
     }
 }
 
-// 定义发送给Gemini API的请求体结构
+// --- 4. Gemini API请求和响应结构 ---
+
 #[derive(Serialize)]
 struct GeminiRequest {
     contents: Vec<Content>,
@@ -101,7 +125,6 @@ struct Part {
     text: String,
 }
 
-// 定义从Gemini API收到的响应体结构 (我们只关心text部分)
 #[derive(Deserialize, Debug)]
 struct GeminiResponse {
     candidates: Vec<Candidate>,
@@ -123,191 +146,244 @@ struct PartResponse {
     text: String,
 }
 
-
-// --- 2. 实现核心的API调用函数 ---
+// --- 5. 核心实现 ---
 
 impl GeminiClient {
-    // 单个资源分析（保持向后兼容）
-    async fn analyze_single_resource(&self, title: String, file_list: Vec<String>) -> Result<AnalysisResult, String> {
-        self.analyze_resource_with_gemini(title, file_list).await
-    }
-
-    // 批量资源分析 - 新的高效方法
-    async fn batch_analyze_resources(&self, titles: Vec<String>) -> Result<BatchAnalysisResult, String> {
+    /// **第一阶段实现**: 仅从HTML提取原始数据，不做任何修改。
+    async fn batch_extract_basic_info_impl(
+        &self,
+        html_content: &str,
+    ) -> Result<BatchExtractBasicInfoResult> {
         let url = format!(
             "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
             self.config.model, self.config.api_key
         );
 
-        // 构建批量分析的prompt
-        let titles_list = titles.iter()
-            .enumerate()
-            .map(|(i, title)| format!("{}. {}", i + 1, title))
-            .collect::<Vec<_>>()
-            .join("\n");
-
         let prompt = format!(
             r#"
-            作为一名媒体文件分析专家，请分析以下磁力资源标题列表，为每个标题返回一个JSON对象。
+作为数据提取引擎，你的唯一任务是从以下HTML内容中识别出所有磁力链接条目，并返回一个包含 "results" 数组的JSON对象。
 
-            请返回一个包含"results"数组的JSON对象，数组中每个元素对应一个标题的分析结果，包含以下字段：
-            - "title": 原始标题（字符串）
-            - "purity_score": 0到100的整数，表示标题的纯净度（100=完全纯净，0=充满广告）
-            - "content_type": 内容类型（"电影", "电视剧", "动漫", "纪录片", "综艺", "音乐", "体育", "软件", "游戏", "其他"）
-            - "video_quality": 视频质量（"4K", "2160p", "1080p", "720p", "标清", "未知"）
-            - "tags": 智能标签数组，如["科幻", "动作", "H.265"]
+**提取规则:**
+1.  **识别条目**: 找到包含磁力链接 (`magnet:?xt=`) 的HTML片段。
+2.  **提取字段**:
+    *   `title`: 提取与磁力链接相关的最直接的标题文本。**不要进行任何形式的清理、修改或美化**。返回原始文本。
+    *   `magnet_link`: 提取完整的磁力链接字符串。
+    *   `file_size`: 提取与该条目相关的文件大小文本（例如 "1.5GB", "899MB"）。如果找不到，则返回 `null`。
+3.  **严格JSON输出**: 返回的JSON对象必须只包含一个 `results` 键，其值为一个对象数组。每个对象都包含 `title`, `magnet_link`, `file_size` 字段。
 
-            **标题列表:**
-            {}
+**重要指令:**
+*   **绝对禁止修改数据**: 你的任务是提取，不是处理。返回你找到的原始信息。
+*   **无需理解内容**: 不要尝试理解标题的含义或美化它。
+*   **保持顺序**: 尽可能按照在HTML中出现的顺序列出结果。
+*   **不要包含任何解释**: 你的输出必须是纯粹的JSON。
 
-            **输出要求:**
-            请严格按照JSON格式返回，确保results数组中的元素顺序与输入标题列表一致。不要包含任何额外的解释或Markdown标记。
-            "#,
-            titles_list
+**HTML内容:**
+```html
+{}
+```
+
+**示例输出:**
+```json
+{{
+  "results": [
+    {{
+      "title": "Some.Movie.Title.2023.1080p.BluRay.x264-GROUP[rartv]",
+      "magnet_link": "magnet:?xt=urn:btih:abcdef123456...",
+      "file_size": "2.3GB"
+    }},
+    {{
+      "title": "[AD] www.example.com [AD] Another.Show.S01E01.720p.WEB-DL",
+      "magnet_link": "magnet:?xt=urn:btih:fedcba654321...",
+      "file_size": "500MB"
+    }}
+  ]
+}}
+```
+"#,
+            html_content
         );
 
-        // 构建请求体
         let request_body = GeminiRequest {
             contents: vec![Content {
                 parts: vec![Part { text: prompt }],
             }],
         };
 
-        let response = self.client.post(&url)
-            .json(&request_body)
-            .send()
-            .await
-            .map_err(|e| format!("网络请求失败: {}", e))?;
-
+        let response = self.client.post(&url).json(&request_body).send().await?;
         if !response.status().is_success() {
             let error_body = response.text().await.unwrap_or_default();
-            return Err(format!("API请求失败: {}", error_body));
+            return Err(anyhow::anyhow!("API请求失败: {}", error_body));
         }
 
-        let gemini_response = response.json::<GeminiResponse>().await
-            .map_err(|e| format!("解析Gemini响应失败: {}", e))?;
-
-        // 从响应中提取批量分析结果
+        let gemini_response = response.json::<GeminiResponse>().await?;
         if let Some(candidate) = gemini_response.candidates.get(0) {
             if let Some(part) = candidate.content.parts.get(0) {
                 let cleaned_text = part.text.trim().replace("```json", "").replace("```", "");
-
-                let result: BatchAnalysisResult = serde_json::from_str(&cleaned_text)
-                    .map_err(|e| format!("解析批量分析JSON失败: {}. Raw text: {}", e, cleaned_text))?;
-
+                let result: BatchExtractBasicInfoResult = serde_json::from_str(&cleaned_text)
+                    .map_err(|e| {
+                        anyhow::anyhow!(
+                            "解析第一阶段JSON失败: {}. Raw text: {}",
+                            e,
+                            cleaned_text
+                        )
+                    })?;
                 return Ok(result);
             }
         }
-
-        Err("Gemini响应中未找到有效内容".to_string())
+        Err(anyhow::anyhow!("Gemini响应中未找到有效内容"))
     }
 
-    // 原有的单个分析方法（重构为内部方法）
-    async fn analyze_resource_with_gemini(&self, title: String, file_list: Vec<String>) -> Result<AnalysisResult, String> {
+    /// **重构后的第二阶段实现**: 根据新的、更简单的逻辑分析标题、文件列表和标签。
+    async fn batch_analyze_scores_and_tags_impl(
+        &self,
+        original_title: &str,
+        file_list: &[String],
+    ) -> Result<(String, u8, Vec<String>)> {
         let url = format!(
             "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
             self.config.model, self.config.api_key
         );
 
-    let files_str = file_list.join("\n");
+        let files_json_array = serde_json::to_string(file_list)?;
 
-    // 构建我们在指南中定义的Prompt
-    let prompt = format!(
-        r#"
-        作为一名媒体文件分析专家，请根据以下磁力资源的标题和文件列表，提取并返回一个JSON对象。
-        这个JSON对象必须包含以下字段：
-        - "purity_score": 一个0到100的整数，表示资源标题和文件列表中不含任何形式广告或无关推广信息（如网址、论坛名称、压制组名称等）的纯净度。100分表示完全纯净，0分表示充满广告。
-        - "content_type": 一个字符串，表示内容的核心类型。可能的值包括："电影", "电视剧", "动漫", "纪录片", "综艺", "音乐", "体育", "软件", "游戏", "其他"。
-        - "video_quality": 一个字符串，表示视频质量。如果无法判断则为"未知"。可能的值包括："4K", "2160p", "1080p", "720p", "标清", "未知"。
-        - "has_subtitles": 一个布尔值，如果文件列表中包含字幕文件（如.srt, .ass, .sub），则为true，否则为false。
-        - "tags": 一个字符串数组，包含从标题和文件名中提取的、描述内容属性的智能标签。例如：["科幻", "动作", "系列电影", "H.265", "DDP5.1"]。
+        let prompt = format!(
+            r#"
+作为媒体资源分析引擎，请根据以下三项独立任务，对提供的数据进行分析，并严格按照JSON格式返回结果。
 
-        **输入信息:**
-        - 标题: {}
-        - 文件列表:
-        {}
+**任务1：精简标题**
+- **输入**: 原始标题字符串。
+- **规则**: 仅从原始标题中移除所有广告内容、网址和推广信息（例如 `[y5y4.com]` 或 `【高清剧集网发布 www.DDHDTV.com】`）。
+- **输出**: 返回一个精简后的标题字符串。
 
-        **输出要求:**
-        请严格按照JSON格式返回，不要包含任何额外的解释或Markdown标记。
-        "#,
-        title, files_str
-    );
+**任务2：计算纯净度分数**
+- **输入**: 文件名列表 (JSON Array)。
+- **规则**:
+  1. 遍历列表中的每个文件名。
+  2. 根据以下标准为每个文件打分：
+     - **0分**: 纯广告文件（如 `.txt`, `.url`, 或包含明确广告词语的文件）。
+     - **80分**: 文件名包含广告信息（如网址）的媒体资源文件。
+     - **100分**: 文件名干净、不含任何广告信息的媒体资源文件。
+  3. 计算所有文件分数的**平均值**，并四舍五入为整数。
+- **输出**: 返回一个0-100之间的整数作为最终纯净度分数。
 
-    // 构建请求体
-    let request_body = GeminiRequest {
-        contents: vec![Content {
-            parts: vec![Part { text: prompt }],
-        }],
-    };
+**任务3：提取标签**
+- **输入**: 原始标题字符串。
+- **规则**: 仅从原始标题中提取关键信息作为标签（例如 "4K", "1080p", "蓝光", "中字"）。
+- **输出**: 返回一个包含标签的字符串数组。
 
-    let response = self.client.post(&url)
-        .json(&request_body)
-        .send()
-        .await
-        .map_err(|e| format!("网络请求失败: {}", e))?;
-  
-    if !response.status().is_success() {
-        let error_body = response.text().await.unwrap_or_default();
-        return Err(format!("API请求失败: {}", error_body));
-    }
+**输入数据:**
+- **原始标题**: "{}"
+- **文件名列表**: {}
 
-    let gemini_response = response.json::<GeminiResponse>().await
-        .map_err(|e| format!("解析Gemini响应失败: {}", e))?;
+**输出要求:**
+- 严格按照以下JSON格式返回，不要包含任何额外的解释或Markdown标记。
+- `cleaned_title` 对应任务1的输出。
+- `purity_score` 对应任务2的输出。
+- `tags` 对应任务3的输出。
 
-    // 从复杂的响应结构中提取出核心的文本内容
-    if let Some(candidate) = gemini_response.candidates.get(0) {
-        if let Some(part) = candidate.content.parts.get(0) {
-            let cleaned_text = part.text.trim().replace("```json", "").replace("```", "");
-          
-            // 将文本解析为我们定义的AnalysisResult结构体
-            let result: AnalysisResult = serde_json::from_str(&cleaned_text)
-                .map_err(|e| format!("解析最终JSON失败: {}. Raw text: {}", e, cleaned_text))?;
-          
-            return Ok(result);
+**示例输出:**
+```json
+{{
+  "cleaned_title": "庆余年.第1季.全46集.4K高清",
+  "purity_score": 95,
+  "tags": ["4K", "高清"]
+}}
+```
+"#,
+            original_title, files_json_array
+        );
+
+        // --- 调试输出: 打印最终的Prompt ---
+        println!("[AI PROMPT] Full prompt being sent to AI:\n---\n{}\n---", prompt);
+
+        let request_body = GeminiRequest {
+            contents: vec![Content {
+                parts: vec![Part { text: prompt }],
+            }],
+        };
+
+        let response = self.client.post(&url).json(&request_body).send().await?;
+        if !response.status().is_success() {
+            let error_body = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("API请求失败: {}", error_body));
         }
+
+        let gemini_response = response.json::<GeminiResponse>().await?;
+        if let Some(candidate) = gemini_response.candidates.get(0) {
+            if let Some(part) = candidate.content.parts.get(0) {
+                let cleaned_text = part.text.trim().replace("```json", "").replace("```", "");
+
+                // --- 调试输出: 打印原始的AI响应 ---
+                println!("[AI RESPONSE] Raw response from AI:\n---\n{}\n---", cleaned_text);
+                
+                #[derive(Deserialize)]
+                struct AnalysisResponse {
+                    cleaned_title: String,
+                    purity_score: u8,
+                    tags: Vec<String>,
+                }
+
+                let analysis: AnalysisResponse = serde_json::from_str(&cleaned_text)
+                    .map_err(|e| {
+                        anyhow::anyhow!(
+                            "解析AI响应JSON失败: {}. Raw text: {}",
+                            e,
+                            cleaned_text
+                        )
+                    })?;
+                
+                return Ok((analysis.cleaned_title, analysis.purity_score, analysis.tags));
+            }
+        }
+        Err(anyhow::anyhow!("Gemini响应中未找到有效内容"))
     }
-
-        Err("Gemini响应中未找到有效内容".to_string())
-    }
 }
 
-// 公共API函数（保持向后兼容）
-pub async fn analyze_resource_with_gemini(title: String, file_list: Vec<String>, config: &LlmConfig) -> Result<AnalysisResult, String> {
+// --- 6. 公共API函数 ---
+
+/// **公共接口 - 第一阶段**: 从HTML提取信息。
+pub async fn batch_extract_basic_info_from_html(
+    html_content: String,
+    config: &LlmConfig,
+) -> Result<BatchExtractBasicInfoResult> {
     let client = GeminiClient::new(config.clone());
-    client.analyze_resource_with_gemini(title, file_list).await
+    client
+        .batch_extract_basic_info_from_html(&html_content)
+        .await
 }
 
-// 新的批量分析API
-pub async fn batch_analyze_resources_with_gemini(titles: Vec<String>, config: &LlmConfig) -> Result<BatchAnalysisResult, String> {
+/// **公共接口 - 第二阶段**: 分析文件列表并返回最终整合结果。
+/// 注意：此函数现在返回一个元组，因为最终的DetailedAnalysisResult需要在调用方构建，
+/// 因为调用方持有第一阶段的结果（magnet_link, file_size）。
+pub async fn batch_analyze_scores_and_tags(
+    original_title: &str,
+    file_list: &[String],
+    config: &LlmConfig,
+) -> Result<(String, u8, Vec<String>)> {
     let client = GeminiClient::new(config.clone());
-    client.batch_analyze_resources(titles).await
+    client.batch_analyze_scores_and_tags(original_title, file_list).await
 }
 
-pub async fn test_connection(config: &LlmConfig) -> Result<String, String> {
+/// 测试与LLM提供商的连接。
+pub async fn test_connection(config: &LlmConfig) -> Result<String> {
     let url = format!(
         "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
         config.model, config.api_key
     );
-
-    let prompt = "你好，请确认你能收到这条消息。";
-
     let request_body = GeminiRequest {
         contents: vec![Content {
-            parts: vec![Part { text: prompt.to_string() }],
+            parts: vec![Part {
+                text: "你好".to_string(),
+            }],
         }],
     };
-
     let client = Client::new();
-    let response = client.post(&url)
-        .json(&request_body)
-        .send()
-        .await
-        .map_err(|e| format!("网络请求失败: {}", e))?;
+    let response = client.post(&url).json(&request_body).send().await?;
 
     if response.status().is_success() {
         Ok("连接成功".to_string())
     } else {
         let error_body = response.text().await.unwrap_or_default();
-        Err(format!("API连接失败: {}", error_body))
+        Err(anyhow::anyhow!("API连接失败: {}", error_body))
     }
 }

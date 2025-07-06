@@ -5,7 +5,7 @@
   "identifier": "com.magnetlink-optimizer-pro.app",
   "build": {
     "beforeDevCommand": "npm run dev",
-    "devUrl": "http://localhost:1422",
+    "devUrl": "http://localhost:1423",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
   },
