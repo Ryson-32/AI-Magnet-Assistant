@@ -214,48 +214,202 @@ async function addEngine() {
 }
 
 function generateUrlTemplate(url1: string, url2: string): string {
-  // Simple URL template generation
-  // This is a basic implementation - in a real app, you'd want more sophisticated logic
+  console.log("🔧 Generating URL template from:", url1, "and", url2);
+
   try {
     const urlObj1 = new URL(url1);
     const urlObj2 = new URL(url2);
-    
-    // Find differences in query parameters
+
+    // Start with the base URL (origin)
+    let template = urlObj1.origin;
+
+    // Process the pathname first (this is where most search engines put keyword/page info)
+    const path1 = urlObj1.pathname;
+    const path2 = urlObj2.pathname;
+
+    console.log("📍 Path1:", path1);
+    console.log("📍 Path2:", path2);
+
+    // Split paths into segments for comparison
+    const segments1 = path1.split('/').filter(s => s.length > 0);
+    const segments2 = path2.split('/').filter(s => s.length > 0);
+
+    console.log("📂 Segments1:", segments1);
+    console.log("📂 Segments2:", segments2);
+
+    // Build template path by comparing segments
+    const templateSegments: string[] = [];
+    const maxLength = Math.max(segments1.length, segments2.length);
+
+    for (let i = 0; i < maxLength; i++) {
+      const seg1 = segments1[i] || '';
+      const seg2 = segments2[i] || '';
+
+      if (seg1 === seg2) {
+        // Same segment in both URLs
+        templateSegments.push(seg1);
+      } else {
+        // Different segments - try to identify patterns
+        const templateSeg = generateSegmentTemplate(seg1, seg2);
+        templateSegments.push(templateSeg);
+      }
+    }
+
+    template += '/' + templateSegments.join('/');
+
+    // Now handle query parameters
     const params1 = new URLSearchParams(urlObj1.search);
     const params2 = new URLSearchParams(urlObj2.search);
-    
-    let template = urlObj1.origin + urlObj1.pathname;
     const templateParams: string[] = [];
-    
+
     // Check each parameter
     for (const [key, value1] of params1) {
       const value2 = params2.get(key);
-      
-      if (value1 === 'test' && value2 === 'test') {
-        // This is likely the keyword parameter
-        templateParams.push(`${key}={keyword}`);
-      } else if (value1 === '1' && value2 === '2') {
-        // This is likely the page parameter
-        templateParams.push(`${key}={page}`);
-      } else if (value1 === value2) {
-        // Same value in both URLs
-        templateParams.push(`${key}=${value1}`);
+
+      if (value2 !== null) {
+        if (value1 === 'test' && value2 === 'test') {
+          // This is likely the keyword parameter
+          templateParams.push(`${key}={keyword}`);
+        } else if (value1 === '1' && value2 === '2') {
+          // This is likely the page parameter
+          templateParams.push(`${key}={page}`);
+        } else if (value1 === value2) {
+          // Same value in both URLs
+          templateParams.push(`${key}=${value1}`);
+        } else {
+          // Different values - try to identify patterns
+          const templateParam = generateParameterTemplate(key, value1, value2);
+          templateParams.push(templateParam);
+        }
       } else {
-        // Different values - use the first one as default
+        // If the parameter doesn't exist in the second URL, just use the first one.
         templateParams.push(`${key}=${value1}`);
       }
     }
-    
+
     if (templateParams.length > 0) {
       template += '?' + templateParams.join('&');
     }
-    
+
+    console.log("✅ Generated template:", template);
     return template;
   } catch (error) {
-    console.error("Failed to generate URL template:", error);
-    // Fallback: just replace 'test' with {keyword} and page numbers with {page}
-    return url1.replace(/test/gi, '{keyword}').replace(/[&?]page=1/, '&page={page}');
+    console.error("❌ Failed to generate URL template:", error);
+    // Enhanced fallback: handle both path and query patterns
+    let fallbackTemplate = url1;
+
+    // Replace common keyword patterns in path
+    fallbackTemplate = fallbackTemplate.replace(/test/gi, '{keyword}');
+
+    // Replace page numbers in path
+    fallbackTemplate = fallbackTemplate.replace(/(\W|^)1(\W|$)/g, '$1{page}$2');
+
+    // Replace page numbers in query parameters
+    fallbackTemplate = fallbackTemplate.replace(/[&?]page=1/, '&page={page}');
+
+    console.log("🔄 Fallback template:", fallbackTemplate);
+    return fallbackTemplate;
   }
+}
+
+// Helper function to generate template for individual path segments
+function generateSegmentTemplate(seg1: string, seg2: string): string {
+  // This function handles segments that differ between the two URLs.
+  // It's designed to find placeholders for keywords and page numbers.
+
+  // We primarily focus on segments that are structured with hyphens,
+  // as this is a common pattern for SEO-friendly URLs.
+  if (seg1.includes('-') && seg2.includes('-')) {
+    const parts1 = seg1.split('-');
+    const parts2 = seg2.split('-');
+
+    if (parts1.length === parts2.length) {
+      const templateParts: string[] = [];
+
+      for (let i = 0; i < parts1.length; i++) {
+        const part1 = parts1[i];
+        const part2 = parts2[i];
+
+        console.log(`🔍 Comparing part ${i}: "${part1}" vs "${part2}"`);
+
+        // Priority 1: Check for the keyword 'test'.
+        // This identifies the part of the URL that holds the search term.
+        if (part1.toLowerCase() === 'test' && part2.toLowerCase() === 'test') {
+          console.log(`✅ Found keyword part: 'test' -> {keyword}`);
+          templateParts.push('{keyword}');
+          continue;
+        }
+
+        // Priority 2: Check for page numbers.
+        // This looks for parts that are different and represent sequential numbers.
+        if (part1 !== part2) {
+          const num1Match = part1.match(/^(\d+)/);
+          const num2Match = part2.match(/^(\d+)/);
+
+          if (num1Match && num2Match) {
+            const num1 = parseInt(num1Match[1], 10);
+            const num2 = parseInt(num2Match[1], 10);
+
+            // Check if they are consecutive numbers (like page 1 and 2)
+            if (Math.abs(num1 - num2) === 1) {
+              const restOfPart = part1.substring(num1Match[1].length);
+              console.log(`✅ Found page part: ${part1} vs ${part2} -> {page}`);
+              templateParts.push(`{page}${restOfPart}`);
+              continue;
+            }
+          }
+        }
+
+        // Priority 3: If parts are identical, keep them as they are.
+        if (part1 === part2) {
+          console.log(`➡️ Same parts: ${part1} -> ${part1}`);
+          templateParts.push(part1);
+        } else {
+          // Priority 4: Fallback for parts that are different but not recognized
+          // as a keyword or page number. We default to the first URL's part.
+          console.log(`⚠️ Different parts: ${part1} vs ${part2} -> using ${part1}`);
+          templateParts.push(part1);
+        }
+      }
+
+      return templateParts.join('-');
+    }
+  }
+
+  // Fallback for segments that don't fit the hyphenated pattern.
+  // This is a simpler check for basic page number differences.
+  if (/\d+/.test(seg1) && /\d+/.test(seg2)) {
+    const num1 = parseInt(seg1.match(/\d+/)?.[0] || '0');
+    const num2 = parseInt(seg2.match(/\d+/)?.[0] || '0');
+
+    if (Math.abs(num1 - num2) === 1) {
+      return seg1.replace(/\d+/, '{page}');
+    }
+  }
+
+  // Default: if no pattern is matched, return the segment from the first URL.
+  return seg1;
+}
+
+// Helper function to generate template for query parameters
+function generateParameterTemplate(key: string, value1: string, value2: string): string {
+  // Check for keyword patterns
+  if (value1 === 'test' || value2 === 'test') {
+    return `${key}={keyword}`;
+  }
+
+  // Check for page patterns
+  if (/^\d+$/.test(value1) && /^\d+$/.test(value2)) {
+    const num1 = parseInt(value1);
+    const num2 = parseInt(value2);
+
+    if (Math.abs(num1 - num2) === 1) {
+      return `${key}={page}`;
+    }
+  }
+
+  // Default: use first value
+  return `${key}=${value1}`;
 }
 </script>
 
