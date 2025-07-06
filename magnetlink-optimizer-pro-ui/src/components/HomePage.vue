@@ -86,6 +86,8 @@ import ResultCard from './ResultCard.vue';
 import { useStore } from '../composables/useStore';
 
 const { loadFromStore } = useStore();
+const showNotification = inject('showNotification') as any; // 正确的位置
+const favoritesTimestamp = inject('favoritesTimestamp') as any;
 
 // 注入全局搜索状态
 const searchState = inject('searchState') as any;
@@ -306,10 +308,11 @@ async function addToFavorites(result: any) {
       fileSize: result.file_size,
       fileList: result.file_list || [],
     });
-    alert("Added to favorites!");
+    showNotification("Added to favorites!", "success");
+    favoritesTimestamp.value = Date.now(); // 触发刷新
   } catch (error) {
     console.error("Failed to add to favorites:", error);
-    alert(`Failed to add to favorites: ${error}`);
+    showNotification(`Failed to add to favorites: ${error}`, "error");
   }
 }
 </script>

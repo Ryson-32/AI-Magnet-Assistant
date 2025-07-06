@@ -27,6 +27,10 @@ const searchState = ref({
 // 提供搜索状态给子组件
 provide('searchState', searchState);
 
+// 收藏夹刷新时间戳
+const favoritesTimestamp = ref(Date.now());
+provide('favoritesTimestamp', favoritesTimestamp);
+
 // 在组件挂载时加载设置
 onMounted(async () => {
   const savedSettings = await loadFromStore('search_settings');
@@ -55,6 +59,28 @@ watch(
 function navigate(page: string) {
   currentPage.value = page;
 }
+
+// Toast 通知状态
+const notification = ref({
+  show: false,
+  message: '',
+  type: 'success' as 'success' | 'error',
+});
+
+// 显示通知的函数
+function showNotification(message: string, type: 'success' | 'error' = 'success', duration: number = 3000) {
+  notification.value = {
+    show: true,
+    message,
+    type,
+  };
+  setTimeout(() => {
+    notification.value.show = false;
+  }, duration);
+}
+
+// 全局提供 showNotification 函数
+provide('showNotification', showNotification);
 </script>
 
 <template>
@@ -71,6 +97,17 @@ function navigate(page: string) {
       <PriorityPage v-show="currentPage === 'priority'" />
       <SettingsPage v-show="currentPage === 'settings'" />
     </main>
+
+    <!-- 全局 Toast 通知 -->
+    <Transition name="fade">
+      <div 
+        v-if="notification.show" 
+        class="toast-notification"
+        :class="`toast-${notification.type}`"
+      >
+        {{ notification.message }}
+      </div>
+    </Transition>
   </div>
 </template>
 
@@ -107,5 +144,37 @@ html, body {
   overflow-y: auto;
   overflow-x: hidden;
   min-width: 0;
+}
+
+.toast-notification {
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 12px 20px;
+  border-radius: 8px;
+  color: white;
+  font-size: 14px;
+  z-index: 1000;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.toast-success {
+  background-color: #4CAF50; /* Green */
+}
+
+.toast-error {
+  background-color: #F44336; /* Red */
+}
+
+/* 过渡动画 */
+.fade-enter-active,
+.fade-leave-active {
+  transition: opacity 0.5s ease;
+}
+
+.fade-enter-from,
+.fade-leave-to {
+  opacity: 0;
 }
 </style>
