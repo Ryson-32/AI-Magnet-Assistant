@@ -31,7 +31,6 @@ pub async fn filter_results(
 /// 优先级筛选：基于已知的高质量来源标记
 fn apply_priority_filter(results: &[SearchResult]) -> Vec<SearchResult> {
     let priority_markers = [
-        "***REMOVED***.com@",
         "高清电影",
         "蓝光原盘",
         "4K",
@@ -173,7 +172,7 @@ mod tests {
                 upload_date: None,
             },
             SearchResult {
-                title: "***REMOVED***.com@ Result 2".to_string(),
+                title: "4K Result 2".to_string(),
                 magnet_link: "magnet:2".to_string(),
                 file_size: None,
                 upload_date: None,
@@ -182,7 +181,7 @@ mod tests {
         let client = Arc::new(MockLlmClient);
         let filtered = filter_results(&results, client).await.unwrap();
         assert_eq!(filtered.len(), 1);
-        assert_eq!(filtered[0].title, "***REMOVED***.com@ Result 2");
+        assert_eq!(filtered[0].title, "4K Result 2");
     }
 
     #[tokio::test]
