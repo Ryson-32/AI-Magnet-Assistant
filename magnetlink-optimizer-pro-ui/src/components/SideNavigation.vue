@@ -57,7 +57,7 @@ const menuItems: MenuItem[] = [
 
 <style scoped>
 .side-navigation {
-  width: 200px;
+  width: 220px;
   height: 100vh;
   background: linear-gradient(180deg, #f8fafc 0%, #f1f5f9 100%);
   color: #334155;
