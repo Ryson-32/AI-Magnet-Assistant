@@ -59,10 +59,11 @@ async fn apply_llm_filter(
         let evaluation_futures: Vec<_> = chunk
             .iter()
             .map(|result| {
-                let client = Arc::clone(&llm_client);
-                let title = result.title.clone();
+                let _client = Arc::clone(&llm_client);
+                let _title = result.title.clone();
                 async move {
-                    (result, client.evaluate_ad(&title).await)
+                    // 移除AI调用，默认返回true（保留）
+                    (result, Ok::<_, anyhow::Error>(true))
                 }
             })
             .collect();
@@ -71,12 +72,12 @@ async fn apply_llm_filter(
 
         for (result, eval_res) in evaluation_results {
             match eval_res {
-                Ok(score) => {
-                    if score < AD_SCORE_THRESHOLD {
+                Ok(is_not_ad) => {
+                    if is_not_ad {
                         filtered_results.push(result.clone());
-                        println!("✓ Kept: {} (score: {:.2})", result.title, score);
+                        println!("✓ Kept: {}", result.title);
                     } else {
-                        println!("✗ Filtered: {} (score: {:.2})", result.title, score);
+                        println!("✗ Filtered (marked as ad): {}", result.title);
                     }
                 }
                 Err(e) => {
@@ -105,10 +106,11 @@ pub async fn enrich_results(
     let enrichment_futures: Vec<_> = results
         .iter()
         .map(|result| {
-            let client = Arc::clone(&llm_client);
-            let title = result.title.clone();
+            let _client = Arc::clone(&llm_client);
+            let _title = result.title.clone();
             async move {
-                (result, client.enrich_result(&title).await)
+                // 移除AI调用，返回一个空的标签向量
+                (result, Ok::<Vec<String>, anyhow::Error>(Vec::new()))
             }
         })
         .collect();

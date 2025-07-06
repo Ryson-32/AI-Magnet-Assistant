@@ -214,9 +214,13 @@ async function search() {
   results.value = [];
 
   try {
+    // 加载LLM配置并传递给后端
+    const llmConfig = await loadFromStore("llm_config");
+
     const searchResults = await invoke("search_multi_page", {
       keyword: keyword.value,
       maxPages: maxPages.value,
+      llmConfig: llmConfig && llmConfig.api_key ? llmConfig : null,
     });
 
     results.value = searchResults as any[];
@@ -254,45 +258,45 @@ async function analyzeResults() {
 
     // 并发分析所有结果
     let completedCount = 0;
-    const analysisPromises = results.value.map(async (result: any, index: number) => {
+    const analysisPromises = results.value.map(async (result: any) => {
       try {
-        const analysis = await invoke('analyze_resource', {
-          title: result.title,
-          fileList: result.file_list || [],
-          config: llmConfig
+        const rawAnalysis = await invoke('analyze_resource', {
+          result: result,
+          llmConfig: llmConfig,
         });
+        let analysis;
 
-        // 更新进度
-        completedCount++;
-        searchStatus.value = `Analyzing ${results.value.length} results with AI (${completedCount}/${results.value.length} completed)...`;
+        try {
+          if (typeof rawAnalysis === 'string') {
+            analysis = JSON.parse(rawAnalysis);
+          } else {
+            analysis = rawAnalysis;
+          }
+        } catch (e) {
+          console.error('Failed to parse analysis from backend:', e);
+          analysis = { error: `Failed to parse analysis: ${e}` };
+        }
 
-        return { result, analysis, index };
+        result.analysis = analysis;
+        if (analysis && analysis.title) {
+          result.title = analysis.title;
+        }
       } catch (e) {
         console.error(`Failed to analyze result: ${result.title}`, e);
+        result.analysis = { error: `Analysis Failed: ${e}` };
+      } finally {
         completedCount++;
         searchStatus.value = `Analyzing ${results.value.length} results with AI (${completedCount}/${results.value.length} completed)...`;
-
-        return {
-          result,
-          analysis: { error: `Analysis Failed: ${e}` },
-          index
-        };
       }
     });
 
     // 等待所有分析任务完成
-    const analysisResults = await Promise.all(analysisPromises);
+    await Promise.all(analysisPromises);
 
     const endTime = Date.now();
     const duration = ((endTime - startTime) / 1000).toFixed(1);
 
-    // 将分析结果映射回原始搜索结果
-    const analyzedResults = analysisResults.map(({ result, analysis }) => {
-      result.analysis = analysis;
-      return result;
-    });
-
-    results.value = analyzedResults;
+    // 结果已直接更新，只需更新状态
     searchStatus.value = `AI analysis completed in ${duration}s (${results.value.length} results processed)`;
   } catch (error) {
     console.error('AI analysis failed:', error);
