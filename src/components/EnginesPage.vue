@@ -46,13 +46,13 @@
           </div>
           
           <div class="engine-actions">
-            <button 
+            <button
               v-if="engine.is_deletable"
-              @click="deleteEngine(engine.id)" 
-              class="delete-btn"
-              title="Delete engine"
+              @click="deleteEngine(engine.id)"
+              :class="['delete-btn', { 'confirm-delete': engine.id === pendingDeleteId }]"
+              :title="engine.id === pendingDeleteId ? 'Confirm deletion' : 'Delete engine'"
             >
-              🗑️
+              {{ engine.id === pendingDeleteId ? '❓' : '🗑️' }}
             </button>
           </div>
         </div>
@@ -61,7 +61,7 @@
 
     <div class="add-engine-section">
       <div class="section-header">
-        <h2>Add New Engine</h2>
+        <h2>Add New Engine (Experimental, may be very slow)</h2>
         <p>Add a custom search engine by providing example URLs</p>
       </div>
       
@@ -126,6 +126,8 @@ interface SearchEngine {
 const engines = ref<SearchEngine[]>([]);
 const loading = ref(false);
 const isAdding = ref(false);
+const pendingDeleteId = ref<string | null>(null);
+const deleteTimeout = ref<any>(null);
 
 const newEngine = ref({
   name: '',
@@ -167,16 +169,22 @@ async function toggleEngine(id: string, isEnabled: boolean) {
 }
 
 async function deleteEngine(id: string) {
-  if (!confirm("Are you sure you want to delete this search engine?")) {
-    return;
-  }
+  clearTimeout(deleteTimeout.value);
 
-  try {
-    await invoke("delete_engine", { id });
-    await loadEngines(); // Reload the list
-  } catch (error) {
-    console.error("Failed to delete engine:", error);
-    alert(`Failed to delete engine: ${error}`);
+  if (pendingDeleteId.value === id) {
+    try {
+      await invoke("delete_engine", { id });
+      await loadEngines(); // Reload the list
+      pendingDeleteId.value = null;
+    } catch (error) {
+      console.error("Failed to delete engine:", error);
+      alert(`Failed to delete engine: ${error}`);
+    }
+  } else {
+    pendingDeleteId.value = id;
+    deleteTimeout.value = setTimeout(() => {
+      pendingDeleteId.value = null;
+    }, 3500);
   }
 }
 
@@ -632,6 +640,15 @@ input:checked + .slider:before {
 
 .delete-btn:hover {
   background: #feb2b2;
+}
+
+.delete-btn.confirm-delete {
+  background-color: #fbd38d; /* A yellow/orange color for confirmation */
+  color: #9c4221;
+}
+
+.delete-btn.confirm-delete:hover {
+  background-color: #f6ad55;
 }
 
 .add-engine-form {

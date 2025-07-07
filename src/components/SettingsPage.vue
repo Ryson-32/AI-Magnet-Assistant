@@ -69,6 +69,22 @@
       </form>
     </div>
 
+    <div class="settings-section">
+      <div class="section-header">
+        <h2>Data & Configuration</h2>
+        <p>Manage application data and configuration files</p>
+      </div>
+      <div class="data-config-grid">
+        <div class="data-config-item">
+          <div>
+            <h4>Application Data</h4>
+            <p>All settings including API keys, custom engines, priorities, and favorites are saved in <code>app_data.json</code>.</p>
+          </div>
+          <button @click="openConfigFolder" class="open-folder-btn">Open File Location</button>
+        </div>
+      </div>
+    </div>
+
     <div class="about-section">
       <div class="section-header">
         <h2>About</h2>
@@ -110,9 +126,8 @@
 <script setup lang="ts">
 import { ref, onMounted, watch } from 'vue';
 import { invoke } from "@tauri-apps/api/core";
-import { useStore } from '../composables/useStore';
-
-const { saveToStore, loadFromStore } = useStore();
+import { appDataDir } from '@tauri-apps/api/path';
+import { openPath, revealItemInDir } from '@tauri-apps/plugin-opener';
 
 const llmConfig = ref({
   provider: "gemini",
@@ -140,7 +155,7 @@ watch(() => llmConfig.value.provider, (newProvider) => {
 
 async function loadLlmConfig() {
   try {
-    const saved = await loadFromStore("llm_config");
+    const saved = await invoke("get_llm_config");
     if (saved) {
       llmConfig.value = { ...llmConfig.value, ...saved };
     }
@@ -152,7 +167,9 @@ async function loadLlmConfig() {
 async function saveLlmConfig() {
   isSaving.value = true;
   try {
-    await saveToStore("llm_config", llmConfig.value);
+    console.log("Saving LLM config:", llmConfig.value);
+    await invoke("update_llm_config", { config: llmConfig.value });
+    console.log("LLM config saved successfully to app_data.json");
     alert("Settings saved successfully!");
   } catch (error) {
     console.error("Failed to save LLM config:", error);
@@ -177,6 +194,23 @@ async function testApiConnection() {
     alert(`Connection failed: ${error}`);
   } finally {
     isTesting.value = false;
+  }
+}
+
+async function openConfigFolder() {
+  const dir = await appDataDir();
+  try {
+    // 尝试使用 revealItemInDir 来显示文件夹
+    await revealItemInDir(dir);
+  } catch (error) {
+    console.error("Failed to open config folder:", error);
+    // 如果 revealItemInDir 失败，尝试使用 openPath
+    try {
+      await openPath(dir);
+    } catch (fallbackError) {
+      console.error("Fallback openPath also failed:", fallbackError);
+      alert(`Could not open folder: ${fallbackError}`);
+    }
   }
 }
 </script>
@@ -377,5 +411,60 @@ async function testApiConnection() {
   border-radius: 16px;
   font-size: 12px;
   font-weight: 500;
+}
+
+.data-config-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.data-config-item {
+  background-color: #f9fafb;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 16px;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+}
+
+.data-config-item h4 {
+  margin: 0 0 4px 0;
+  font-size: 16px;
+  font-weight: 600;
+  color: #1a202c;
+}
+
+.data-config-item p {
+  margin: 0;
+  color: #4a5568;
+  font-size: 14px;
+}
+
+.data-config-item code {
+  background-color: #e2e8f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', Courier, monospace;
+  font-size: 13px;
+}
+
+.open-folder-btn {
+  padding: 10px 16px;
+  background: white;
+  color: #3b82f6;
+  border: 1px solid #3b82f6;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.open-folder-btn:hover {
+  background: #eff6ff;
+  border-color: #2563eb;
 }
 </style>

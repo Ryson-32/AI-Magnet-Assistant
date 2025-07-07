@@ -1,14 +1,12 @@
 <script setup lang="ts">
 import { ref, provide, onMounted, watch } from "vue";
+import { invoke } from "@tauri-apps/api/core";
 import SideNavigation from "./components/SideNavigation.vue";
 import HomePage from "./components/HomePage.vue";
 import FavoritesPage from "./components/FavoritesPage.vue";
 import EnginesPage from "./components/EnginesPage.vue";
 import PriorityPage from "./components/PriorityPage.vue";
 import SettingsPage from "./components/SettingsPage.vue";
-import { useStore } from "./composables/useStore";
-
-const { saveToStore, loadFromStore } = useStore();
 
 const currentPage = ref('home');
 
@@ -33,12 +31,16 @@ provide('favoritesTimestamp', favoritesTimestamp);
 
 // 在组件挂载时加载设置
 onMounted(async () => {
-  const savedSettings = await loadFromStore('search_settings');
-  if (savedSettings) {
-    searchState.value.useSmartFilter = savedSettings.useSmartFilter ?? true;
-    searchState.value.maxPages = savedSettings.maxPages ?? 1;
-    searchState.value.sortBy = savedSettings.sortBy ?? 'score';
-    searchState.value.titleMustContainKeyword = savedSettings.titleMustContainKeyword ?? true;
+  try {
+    const savedSettings = await invoke('get_search_settings') as any;
+    if (savedSettings) {
+      searchState.value.useSmartFilter = savedSettings.use_smart_filter ?? true;
+      searchState.value.maxPages = savedSettings.max_pages ?? 1;
+      searchState.value.sortBy = savedSettings.sort_by ?? 'score';
+      searchState.value.titleMustContainKeyword = savedSettings.title_must_contain_keyword ?? true;
+    }
+  } catch (error) {
+    console.error('Failed to load search settings:', error);
   }
 });
 
@@ -50,8 +52,19 @@ watch(
     sortBy: searchState.value.sortBy,
     titleMustContainKeyword: searchState.value.titleMustContainKeyword,
   }),
-  (newSettings) => {
-    saveToStore('search_settings', newSettings);
+  async (newSettings) => {
+    try {
+      await invoke('update_search_settings', {
+        settings: {
+          use_smart_filter: newSettings.useSmartFilter,
+          max_pages: newSettings.maxPages,
+          sort_by: newSettings.sortBy,
+          title_must_contain_keyword: newSettings.titleMustContainKeyword,
+        }
+      });
+    } catch (error) {
+      console.error('Failed to save search settings:', error);
+    }
   },
   { deep: true }
 );

@@ -35,12 +35,54 @@ pub struct PriorityKeyword {
     pub keyword: String,
 }
 
+/// LLM 配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmConfig {
+    pub provider: String,
+    pub api_key: String,
+    pub api_base: String,
+    pub model: String,
+}
+
+impl Default for LlmConfig {
+    fn default() -> Self {
+        Self {
+            provider: "gemini".to_string(),
+            api_key: "".to_string(),
+            api_base: "https://generativelanguage.googleapis.com/v1beta".to_string(),
+            model: "gemini-2.5-flash".to_string(),
+        }
+    }
+}
+
+/// 搜索设置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct SearchSettings {
+    pub use_smart_filter: bool,
+    pub max_pages: u32,
+    pub sort_by: String,
+    pub title_must_contain_keyword: bool,
+}
+
+impl Default for SearchSettings {
+    fn default() -> Self {
+        Self {
+            use_smart_filter: true,
+            max_pages: 1,
+            sort_by: "score".to_string(),
+            title_must_contain_keyword: true,
+        }
+    }
+}
+
 /// 应用状态数据结构
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppData {
     pub favorites: Vec<FavoriteItem>,
     pub search_engines: Vec<SearchEngine>,
     pub priority_keywords: Vec<PriorityKeyword>,
+    pub llm_config: LlmConfig,
+    pub search_settings: SearchSettings,
     pub version: String, // 用于数据迁移
 }
 
@@ -59,6 +101,8 @@ impl Default for AppData {
                 }
             ],
             priority_keywords: Vec::new(),
+            llm_config: LlmConfig::default(),
+            search_settings: SearchSettings::default(),
             version: "1.0.0".to_string(),
         }
     }
@@ -301,5 +345,35 @@ pub fn delete_priority_keyword(state: &AppState, id: String) -> Result<()> {
         return Err(anyhow!("Priority keyword not found"));
     }
     
+    Ok(())
+}
+
+// ============ LLM 配置相关函数 ============
+
+/// 获取 LLM 配置
+pub fn get_llm_config(state: &AppState) -> LlmConfig {
+    let data = state.lock().unwrap();
+    data.llm_config.clone()
+}
+
+/// 更新 LLM 配置
+pub fn update_llm_config(state: &AppState, config: LlmConfig) -> Result<()> {
+    let mut data = state.lock().unwrap();
+    data.llm_config = config;
+    Ok(())
+}
+
+// ============ 搜索设置相关函数 ============
+
+/// 获取搜索设置
+pub fn get_search_settings(state: &AppState) -> SearchSettings {
+    let data = state.lock().unwrap();
+    data.search_settings.clone()
+}
+
+/// 更新搜索设置
+pub fn update_search_settings(state: &AppState, settings: SearchSettings) -> Result<()> {
+    let mut data = state.lock().unwrap();
+    data.search_settings = settings;
     Ok(())
 }

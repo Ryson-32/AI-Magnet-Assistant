@@ -49,8 +49,12 @@
             <span class="keyword-badge">Priority</span>
           </div>
           
-          <button @click="deleteKeyword(keyword.id)" class="delete-btn" title="Remove keyword">
-            ✕
+          <button
+            @click="deleteKeyword(keyword.id)"
+            :class="['delete-btn', { 'confirm-delete': keyword.id === pendingDeleteId }]"
+            :title="keyword.id === pendingDeleteId ? 'Confirm deletion' : 'Remove keyword'"
+          >
+            {{ keyword.id === pendingDeleteId ? '❓' : '✕' }}
           </button>
         </div>
       </div>
@@ -93,6 +97,8 @@ const keywords = ref<PriorityKeyword[]>([]);
 const newKeyword = ref("");
 const loading = ref(false);
 const isAdding = ref(false);
+const pendingDeleteId = ref<string | null>(null);
+const deleteTimeout = ref<any>(null);
 
 onMounted(() => {
   loadKeywords();
@@ -138,16 +144,22 @@ async function addKeyword() {
 }
 
 async function deleteKeyword(id: string) {
-  if (!confirm("Are you sure you want to remove this priority keyword?")) {
-    return;
-  }
+  clearTimeout(deleteTimeout.value);
 
-  try {
-    await invoke("delete_priority_keyword", { id });
-    await loadKeywords(); // Reload the list
-  } catch (error) {
-    console.error("Failed to delete keyword:", error);
-    alert(`Failed to delete keyword: ${error}`);
+  if (pendingDeleteId.value === id) {
+    try {
+      await invoke("delete_priority_keyword", { id });
+      await loadKeywords(); // Reload the list
+      pendingDeleteId.value = null;
+    } catch (error) {
+      console.error("Failed to delete keyword:", error);
+      alert(`Failed to delete keyword: ${error}`);
+    }
+  } else {
+    pendingDeleteId.value = id;
+    deleteTimeout.value = setTimeout(() => {
+      pendingDeleteId.value = null;
+    }, 3500);
   }
 }
 </script>
@@ -352,6 +364,15 @@ async function deleteKeyword(id: string) {
 
 .delete-btn:hover {
   background: #feb2b2;
+}
+
+.delete-btn.confirm-delete {
+  background-color: #fbd38d; /* A yellow/orange color for confirmation */
+  color: #9c4221;
+}
+
+.delete-btn.confirm-delete:hover {
+  background-color: #f6ad55;
 }
 
 .info-section {
