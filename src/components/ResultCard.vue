@@ -3,6 +3,7 @@ import { ref, computed } from 'vue';
 
 interface Props {
   title?: string;
+  originalTitle?: string;
   magnetLink?: string;
   fileSize?: string;
   uploadDate?: string;
@@ -73,7 +74,7 @@ function openSourceUrl() {
       <div class="title-section">
         <div class="title-row">
           <div class="title-wrapper">
-            <h3 class="title" :title="title">{{ title }}</h3>
+            <h3 class="title" :title="originalTitle || title">{{ title }}</h3>
             <span v-if="isPriority" class="priority-badge">📌 Priority</span>
           </div>
           <div class="actions">
