@@ -92,7 +92,7 @@
       
       <div class="about-content">
         <div class="app-info">
-          <h3>🧲 MagnetLink Optimizer Pro</h3>
+          <h3>🧲 AI Magnet Assistant</h3>
           <p>Version 1.0.0</p>
           <p>An intelligent magnet link search and optimization tool powered by AI.</p>
         </div>
