@@ -1,19 +1,21 @@
 [简体中文](README.zh-CN.md)
-**Disclaimer:** A significant portion of this project was developed with the assistance of AI Development Tools. If you are interested in these tools, we welcome you to visit [https://ai.pu.edu.kg/](https://ai.pu.edu.kg/) to rate and review them.
+**Disclaimer:** Most of the code in this project was completed with the assistance of AI Development Tools. If you are interested in these AI tools, you are welcome to visit [https://ai.pu.edu.kg/](https://ai.pu.edu.kg/) to rate and review them.
 
 # AI Magnet Assistant
 
 ## Introduction
 
-**AI Magnet Assistant** is an intelligent magnet link search and optimization tool built with Rust, Tauri, and Vue.js. It leverages the power of AI to provide users with a streamlined and efficient search experience by aggregating results from multiple search engines, filtering out invalid links, and ranking them for quality.
+**AI Magnet Assistant** is an intelligent magnet link search and optimization tool built with Rust, Tauri, and Vue.js. It leverages the power of AI to provide users with a smooth and efficient search experience by aggregating results from multiple search engines, filtering invalid links, and ranking them for quality.
 
 ## Key Features
 
--   **Multi-Engine Search**: Conducts parallel searches across various magnet link providers to ensure comprehensive results.
--   **AI-Powered Optimization**: Utilizes AI algorithms to analyze, score, and rank search results, prioritizing the most relevant and reliable links.
+-   **Multi-Engine Search**: Performs parallel searches across multiple magnet link providers to ensure comprehensive results.
+-   **AI-Driven Optimization**: Utilizes AI algorithms to analyze, score, and rank search results, prioritizing the most relevant and reliable links.
 -   **Invalid Link Filtering**: Automatically identifies and removes dead or invalid links, saving you time and effort.
--   **Intuitive User Interface**: A clean, modern, and user-friendly interface built with Vue.js for a seamless user experience.
--   **Cross-Platform**: Built with Tauri, allowing the application to run on Windows, macOS, and Linux from a single codebase.
+-   **Intuitive User Interface**: A clean, modern, and user-friendly interface built with Vue.js.
+-   **Cross-Platform Support**: Built with Tauri, allowing the application to run on Windows, macOS, and Linux from a single codebase.
+-   **Extensible Search Engine**: Includes the built-in `clmclm.com` search engine and supports adding custom sites (Note: Some sites may have anti-scraping measures, and custom sites are analyzed by AI processing the entire HTML, which can be slow).
+-   **Gemini API Integration**: Currently, only Gemini API integration is supported. It is recommended to use models that support high concurrency (e.g., `gemini-2.5-flash`) for optimal performance.
 
 ## Getting Started
 
