@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "MagnetLink Optimizer Pro",
+  "productName": "AI Magnet Assistant",
   "version": "0.1.0",
-  "identifier": "com.magnetlink-optimizer-pro.app",
+  "identifier": "com.ai-magnet-assistant.app",
   "build": {
     "beforeDevCommand": "npm run dev",
     "devUrl": "http://localhost:1423",
@@ -13,7 +13,7 @@
   "app": {
     "windows": [
       {
-        "title": "MagnetLink Optimizer Pro",
+        "title": "AI Magnet Assistant",
         "width": 1280,
         "height": 960
       }
