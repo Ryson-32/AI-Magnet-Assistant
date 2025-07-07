@@ -1,4 +1,5 @@
 [English](README.md)
+**声明:** 本项目的大部分代码是在 AI Development Tools 的辅助下完成的。如果您对这些 AI 工具有兴趣，欢迎访问 [https://ai.pu.edu.kg/](https://ai.pu.edu.kg/) 为它们打分和评价。
 
 # AI Magnet Assistant (AI 磁力助手)
 

@@ -1,4 +1,5 @@
 [简体中文](README.zh-CN.md)
+**Disclaimer:** A significant portion of this project was developed with the assistance of AI Development Tools. If you are interested in these tools, we welcome you to visit [https://ai.pu.edu.kg/](https://ai.pu.edu.kg/) to rate and review them.
 
 # AI Magnet Assistant
 
