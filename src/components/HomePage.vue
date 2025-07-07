@@ -61,6 +61,7 @@
         <div v-for="(result, index) in results" :key="index" class="result-item-wrapper">
           <ResultCard
             :title="result.title"
+            :original-title="result.originalTitle"
             :magnet-link="result.magnet_link"
             :file-size="result.file_size"
             :upload-date="result.upload_date"
@@ -83,16 +84,13 @@
 import { ref, inject, computed } from 'vue';
 import { invoke } from "@tauri-apps/api/core";
 import ResultCard from './ResultCard.vue';
-import { useStore } from '../composables/useStore';
-
-const { loadFromStore } = useStore();
-const showNotification = inject('showNotification') as any; // 正确的位置
+const showNotification = inject('showNotification') as any; // Correct position
 const favoritesTimestamp = inject('favoritesTimestamp') as any;
 
-// 注入全局搜索状态
+// Inject global search state
 const searchState = inject('searchState') as any;
 
-// 使用全局状态，如果不存在则创建本地状态
+// Use global state, create local state if not available
 const keyword = searchState ? computed({
   get: () => searchState.value.keyword,
   set: (val) => searchState.value.keyword = val
@@ -133,9 +131,9 @@ const titleMustContainKeyword = searchState ? computed({
   set: (val) => searchState.value.titleMustContainKeyword = val
 }) : ref(true);
 
-// 排序函数
+// Sort function
 async function sortResults(resultsArray: any[]) {
-  // 首先获取优先关键词
+  // First get priority keywords
   let priorityKeywords: any[] = [];
   try {
     priorityKeywords = await invoke("get_all_priority_keywords");
@@ -143,15 +141,15 @@ async function sortResults(resultsArray: any[]) {
     console.error("Failed to load priority keywords:", error);
   }
 
-  // 为每个结果添加优先级标记
+  // Add priority flag to each result
   resultsArray.forEach((result: any) => {
     result.isPriority = priorityKeywords.some((pk: any) => {
       const keyword = pk.keyword.toLowerCase();
-      // 检查标题
+      // Check title
       if (result.title.toLowerCase().includes(keyword)) {
         return true;
       }
-      // 检查文件列表
+      // Check file list
       if (result.file_list && Array.isArray(result.file_list)) {
         return result.file_list.some((fileName: string) => fileName.toLowerCase().includes(keyword));
       }
@@ -159,13 +157,13 @@ async function sortResults(resultsArray: any[]) {
     });
   });
 
-  // 排序：优先关键词结果在前，然后按选择的排序方式排序
+  // Sort: priority keyword results first, then by selected sort method
   resultsArray.sort((a: any, b: any) => {
-    // 首先按优先级排序
+    // First sort by priority
     if (a.isPriority && !b.isPriority) return -1;
     if (!a.isPriority && b.isPriority) return 1;
 
-    // 如果优先级相同，按选择的排序方式排序
+    // If priority is the same, sort by selected method
     if (sortBy.value === 'score') {
       const scoreA = a.analysis?.purity_score || 0;
       const scoreB = b.analysis?.purity_score || 0;
@@ -214,8 +212,8 @@ async function search() {
   results.value = [];
 
   try {
-    // 加载LLM配置并传递给后端
-    const llmConfig = await loadFromStore("llm_config");
+    // Load LLM config and pass to backend
+    const llmConfig = await invoke("get_llm_config") as any;
 
     const searchResults = await invoke("search_multi_page", {
       keyword: keyword.value,
@@ -226,15 +224,15 @@ async function search() {
     results.value = searchResults as any[];
     searchStatus.value = `Found ${results.value.length} results`;
 
-    // 1. 首先进行排序以识别优先项
+    // 1. First sort to identify priority items
     await sortResults(results.value);
 
-    // 2. 如果启用了智能筛选，则进行分析
+    // 2. If smart filter is enabled, perform analysis
     if (useSmartFilter.value && results.value.length > 0) {
       await analyzeResults();
     }
 
-    // 3. 再次排序以应用AI分数，同时保持优先级
+    // 3. Sort again to apply AI scores while maintaining priority
     await sortResults(results.value);
   } catch (error) {
     console.error("Search failed:", error);
@@ -246,8 +244,8 @@ async function search() {
 
 async function analyzeResults() {
   try {
-    // 加载LLM配置
-    const llmConfig = await loadFromStore("llm_config");
+    // Load LLM config
+    const llmConfig = await invoke("get_llm_config") as any;
     if (!llmConfig || !llmConfig.api_key) {
       searchStatus.value = "AI analysis requires API key configuration. Please check Settings.";
       return;
@@ -279,6 +277,11 @@ async function analyzeResults() {
 
         result.analysis = analysis;
         if (analysis && analysis.title) {
+          // 保存原始标题用于tooltip显示
+          if (!result.originalTitle) {
+            result.originalTitle = result.title;
+          }
+          // 使用精简标题作为显示标题
           result.title = analysis.title;
         }
       } catch (e) {

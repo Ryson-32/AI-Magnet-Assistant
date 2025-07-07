@@ -20,6 +20,7 @@ pub struct SearchResult {
 /// 搜索引擎提供商特性
 #[async_trait::async_trait]
 pub trait SearchProvider: Send + Sync {
+    #[allow(dead_code)]
     fn name(&self) -> &str;
     async fn search(&self, query: &str, page: u32) -> Result<Vec<SearchResult>>;
 }
@@ -300,72 +301,17 @@ impl GenericProvider {
             html
         };
 
-        // 构建第一阶段的HTML分析prompt - 只提取信息，不做处理
-        let prompt = format!(
-            r#"
-请从以下HTML内容中提取所有磁力链接和相关信息，**不要做任何清理或处理，原样返回**。
-
-**任务：原样提取信息**
-
-请返回一个包含"results"数组的JSON对象，数组中每个元素包含以下字段：
-
-1. "title": 原始标题（字符串）
-   - **直接提取HTML中显示的标题，不要删除任何内容**
-   - **保留所有广告、网址、特殊字符等**
-
-2. "magnet_link": 磁力链接（字符串）
-   - 完整的magnet:?xt=urn:btih:开头的链接
-
-3. "file_size": 文件大小（字符串或null）
-   - 如果HTML中有文件大小信息，原样提取
-   - 不要修改格式
-
-4. "upload_date": 上传日期（字符串或null）
-   - 如果HTML中有日期信息，原样提取
-   - 不要修改格式
-
-5. "file_list": 文件列表（字符串数组）
-   - 如果HTML中有文件列表，原样提取
-   - 如果没有，返回空数组[]
-
-**HTML内容:**
-{}
-
-**重要要求:**
-1. **不要清理标题，不要删除广告或无关信息**
-2. **原样提取所有信息，保持原始格式**
-3. 只提取真实存在的磁力链接，不要编造
-4. 严格按照JSON格式返回
-5. 如果没有找到任何磁力链接，返回空的results数组
-6. 不要包含任何额外的解释或Markdown标记
-
-示例输出：
-{{
-  "results": [
-    {{
-      "title": "[广告网站]复仇者联盟4：终局之战.2019.1080p.BluRay.x264[更多资源访问www.xxx.com]",
-      "magnet_link": "magnet:?xt=urn:btih:1234567890abcdef...",
-      "file_size": "2.1GB",
-      "upload_date": "2023-01-15",
-      "file_list": []
-    }}
-  ]
-}}
-            "#,
-            truncated_html
-        );
-
-        // 直接调用AI进行HTML分析
-        match self.call_ai_for_html_analysis(&prompt, llm_client).await {
+        // 直接传递原始HTML给AI服务，让llm_service.rs负责构建提示词
+        match self.call_ai_for_html_analysis(truncated_html, llm_client).await {
             Ok(ai_results) => Ok(ai_results),
             Err(e) => Err(anyhow!("AI HTML analysis failed: {}", e))
         }
     }
 
     /// 直接调用AI进行HTML分析
-    async fn call_ai_for_html_analysis(&self, prompt: &str, llm_client: Arc<dyn LlmClient>) -> Result<Vec<SearchResult>> {
-        // 直接将包含完整HTML的prompt传递给AI
-        match llm_client.batch_extract_basic_info_from_html(prompt).await {
+    async fn call_ai_for_html_analysis(&self, html_content: &str, llm_client: Arc<dyn LlmClient>) -> Result<Vec<SearchResult>> {
+        // 将原始HTML传递给AI服务，由llm_service.rs构建提示词
+        match llm_client.batch_extract_basic_info_from_html(html_content).await {
             Ok(batch_result) => {
                 // AI返回的JSON响应被解析到batch_result.results中
                 // 我们需要将整个结果传递给解析函数
@@ -377,61 +323,24 @@ impl GenericProvider {
 
     /// 解析AI返回的HTML分析结果
     fn parse_ai_html_response_from_batch(&self, batch_result: crate::llm_service::BatchExtractBasicInfoResult) -> Result<Vec<SearchResult>> {
-        // 这个函数现在接收整个BatchExtractBasicInfoResult
-        // 实际的JSON字符串在第一个提取结果的标题中
-        if let Some(basic_info) = batch_result.results.get(0) {
-            self.parse_ai_html_response(&basic_info.title)
-        } else {
-                    Err(anyhow!("No results from AI HTML analysis"))
-                }
-    }
-
-    /// 解析AI返回的HTML分析结果 (旧签名，保留兼容性)
-    fn parse_ai_html_response(&self, ai_response: &str) -> Result<Vec<SearchResult>> {
-        #[derive(serde::Deserialize)]
-        struct AiHtmlResponse {
-            results: Vec<AiTorrentInfo>,
-        }
-
-        #[derive(serde::Deserialize)]
-        struct AiTorrentInfo {
-            title: String,
-            magnet_link: String,
-            file_size: Option<String>,
-            upload_date: Option<String>,
-            file_list: Vec<String>,
-        }
-
-        // 清理AI响应，移除可能的markdown标记
-        let cleaned_response = ai_response
-            .trim()
-            .replace("```json", "")
-            .replace("```", "")
-            .trim()
-            .to_string();
-
-        let ai_response: AiHtmlResponse = serde_json::from_str(&cleaned_response)
-            .map_err(|e| anyhow!("Failed to parse AI response JSON: {}. Response: {}", e, cleaned_response))?;
-
+        // 直接从BatchExtractBasicInfoResult转换为SearchResult
         let mut results = Vec::new();
-        for ai_info in ai_response.results {
+
+        for basic_info in batch_result.results {
             // 验证磁力链接格式
-            if !ai_info.magnet_link.starts_with("magnet:?xt=urn:btih:") {
-                println!("⚠️ Invalid magnet link format, skipping: {}", ai_info.magnet_link);
+            if !basic_info.magnet_link.starts_with("magnet:?xt=urn:btih:") {
+                println!("⚠️ Invalid magnet link format, skipping: {}", basic_info.magnet_link);
                 continue;
             }
 
-            let file_list = if ai_info.file_list.is_empty() {
-                generate_file_list_from_title(&ai_info.title)
-            } else {
-                ai_info.file_list
-            };
+            // 第一阶段AI只提取基础信息，文件列表需要根据标题生成
+            let file_list = generate_file_list_from_title(&basic_info.title);
 
             results.push(SearchResult {
-                title: ai_info.title,
-                magnet_link: ai_info.magnet_link,
-                file_size: ai_info.file_size,
-                upload_date: ai_info.upload_date,
+                title: basic_info.title,
+                magnet_link: basic_info.magnet_link,
+                file_size: basic_info.file_size,
+                upload_date: None, // 第一阶段不提取上传日期
                 file_list,
                 source_url: None,
                 score: None,
@@ -441,6 +350,8 @@ impl GenericProvider {
 
         Ok(results)
     }
+
+    // 注意：parse_ai_html_response 函数已被删除，因为现在直接使用 BatchExtractBasicInfoResult
 
     /// 分离优先结果和普通结果
     fn separate_priority_results(&self, results: Vec<SearchResult>) -> (Vec<SearchResult>, Vec<SearchResult>) {
@@ -518,124 +429,8 @@ impl GenericProvider {
 
 
 
-    /// 基于AI分析生成增强的文件列表
-    fn generate_ai_enhanced_file_list(&self, title: &str, tags: &[String], content_type: &str, has_subtitles: bool) -> Vec<String> {
-        let mut files = Vec::new();
-
-        // 清理标题，移除特殊字符
-        let clean_title = self.clean_title_for_filename(title);
-
-        // 根据内容类型生成主文件
-        match content_type {
-            "电影" => {
-                files.push(format!("{}.1080p.BluRay.x264.mkv", clean_title));
-                if has_subtitles {
-                    files.push(format!("{}.chs.srt", clean_title));
-                    files.push(format!("{}.eng.srt", clean_title));
-                }
-                files.push("Sample.mkv".to_string());
-            },
-            "电视剧" => {
-                // 生成多集文件
-                for i in 1..=6 {
-                    files.push(format!("{}.S01E{:02}.1080p.WEB-DL.x264.mkv", clean_title, i));
-                }
-                if has_subtitles {
-                    files.push("Subtitles/Chinese.srt".to_string());
-                    files.push("Subtitles/English.srt".to_string());
-                }
-            },
-            "动漫" => {
-                for i in 1..=12 {
-                    files.push(format!("{}.E{:02}.1080p.x264.mkv", clean_title, i));
-                }
-                if has_subtitles {
-                    files.push("字幕/简体中文.ass".to_string());
-                    files.push("字幕/繁体中文.ass".to_string());
-                }
-            },
-            "音乐" => {
-                for i in 1..=10 {
-                    files.push(format!("{:02}. Track {}.flac", i, i));
-                }
-                files.push("Cover.jpg".to_string());
-                files.push("Booklet.pdf".to_string());
-            },
-            "软件" => {
-                files.push(format!("{}_Setup.exe", clean_title));
-                files.push("Crack/Keygen.exe".to_string());
-                files.push("License.txt".to_string());
-                files.push("README.txt".to_string());
-            },
-            "游戏" => {
-                files.push(format!("{}.exe", clean_title));
-                files.push("Setup.exe".to_string());
-                files.push("Crack/Patch.exe".to_string());
-                files.push("Game_Manual.pdf".to_string());
-            },
-            _ => {
-                // 默认处理
-                files.push(format!("{}.mkv", clean_title));
-                if has_subtitles {
-                    files.push(format!("{}.srt", clean_title));
-                }
-            }
-        }
-
-        // 基于标签添加特定文件
-        for tag in tags {
-            if tag.contains("花絮") || tag.contains("Behind") {
-                files.push("Behind_the_Scenes.mp4".to_string());
-            } else if tag.contains("预告") || tag.contains("Trailer") {
-                files.push("Trailer.mp4".to_string());
-            } else if tag.contains("评论") || tag.contains("Commentary") {
-                files.push("Director_Commentary.mp3".to_string());
-            }
-        }
-
-        // 添加通用文件
-        if !files.iter().any(|f| f.contains("README")) {
-            files.push("README.txt".to_string());
-        }
-
-        files
-    }
-
-    /// 清理标题用于文件名
-    fn clean_title_for_filename(&self, title: &str) -> String {
-        let mut clean = title.to_string();
-
-        // 移除常见的格式标识和特殊字符
-        let patterns_to_remove = [
-            r"\[.*?\]", r"\(.*?\)", r"【.*?】", r"（.*?）",
-            r"1080p", r"720p", r"4K", r"BluRay", r"WEB-DL", r"HDTV",
-            r"x264", r"x265", r"H\.264", r"H\.265", r"HEVC",
-            r"DTS", r"AC3", r"AAC", r"MP3", r"FLAC",
-            r"mkv", r"mp4", r"avi", r"rmvb", r"wmv"
-        ];
-
-        for pattern in &patterns_to_remove {
-            if let Ok(re) = regex::Regex::new(&format!("(?i){}", pattern)) {
-                clean = re.replace_all(&clean, "").to_string();
-            }
-        }
-
-        // 清理空格和特殊字符
-        clean = clean
-            .trim()
-            .replace("  ", " ")
-            .replace(" ", "_")
-            .chars()
-            .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-' || c.is_ascii_punctuation() == false)
-            .take(30) // 限制长度
-            .collect();
-
-        if clean.is_empty() {
-            "Unknown".to_string()
-        } else {
-            clean
-        }
-    }
+    // 注意：generate_ai_enhanced_file_list 和 clean_title_for_filename 方法已被删除
+    // 因为它们未被使用，文件列表生成现在使用 generate_file_list_from_title 函数
 
     fn parse_generic_results(&self, html: &str) -> Result<Vec<SearchResult>> {
         let document = Html::parse_document(html);
@@ -921,29 +716,7 @@ pub struct SearchCore {
 }
 
 impl SearchCore {
-    pub fn new() -> Self {
-        let mut providers: Vec<Arc<dyn SearchProvider>> = Vec::new();
-        providers.push(Arc::new(ClmclmProvider::new()));
-
-        Self { providers }
-    }
-
-    /// 从搜索引擎配置创建SearchCore
-    pub fn from_engine_config(name: &str, url_template: &str) -> Self {
-        let mut providers: Vec<Arc<dyn SearchProvider>> = Vec::new();
-
-        if name == "clmclm.com" {
-            providers.push(Arc::new(ClmclmProvider::new()));
-        } else {
-            // 对于自定义搜索引擎，创建基础的通用提供商（不带AI功能）
-            providers.push(Arc::new(GenericProvider::new(
-                name.to_string(),
-                url_template.to_string()
-            )));
-        }
-
-        Self { providers }
-    }
+    // 注意：基础构造函数已被删除，统一使用 create_ai_enhanced_search_core
 
     /// 多线程并发搜索
     pub async fn search_multi_page(&self, query: &str, max_pages: u32) -> Result<Vec<SearchResult>> {
@@ -983,6 +756,7 @@ impl SearchCore {
     }
 
     /// 单页搜索（向后兼容）
+    #[allow(dead_code)]
     pub async fn search(&self, query: &str) -> Result<Vec<SearchResult>> {
         self.search_multi_page(query, 1).await
     }
@@ -1026,15 +800,21 @@ pub fn create_ai_enhanced_search_core(
     SearchCore { providers }
 }
 
-/// 向后兼容的搜索函数
+/// 向后兼容的搜索函数（主要用于测试）
+#[allow(dead_code)]
 pub async fn search(query: &str, base_url: Option<&str>) -> Result<Vec<SearchResult>> {
     if base_url.is_some() {
         // 如果指定了base_url，使用旧的实现逻辑（主要用于测试）
         let provider = ClmclmProvider::new();
         provider.search(query, 1).await
     } else {
-        // 使用新的搜索核心
-        let search_core = SearchCore::new();
+        // 使用AI增强的搜索核心，但不包含AI配置（用于基础测试）
+        let search_core = create_ai_enhanced_search_core(
+            None, // 无AI配置
+            Vec::new(), // 无优先关键词
+            Vec::new(), // 无自定义引擎
+            true // 包含clmclm.com
+        );
         search_core.search(query).await
     }
 }
@@ -1109,7 +889,8 @@ mod tests {
         });
 
         // Perform the search
-        let results = search("empty", Some(&server.base_url())).await.unwrap();
+        let base_url = server.base_url();
+        let results = search("empty", Some(&base_url)).await.unwrap();
 
         // Assert
         mock.assert();

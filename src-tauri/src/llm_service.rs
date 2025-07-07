@@ -53,11 +53,7 @@ struct LlmFileAnalysis {
     pub purity_score: u8,          // LLM计算的纯净度分数 (仅对主媒体文件有意义)
 }
 
-/// 第二阶段LLM返回的批量结果
-#[derive(Serialize, Deserialize, Debug)]
-struct BatchLlmFileAnalysis {
-    pub results: Vec<LlmFileAnalysis>,
-}
+// 注意：BatchLlmFileAnalysis 结构体已被删除，因为未被使用
 
 // --- 3. LLM客户端定义 ---
 
@@ -252,8 +248,12 @@ impl GeminiClient {
 
 **任务1：精简标题**
 - **输入**: 原始标题字符串。
-- **规则**: 仅从原始标题中移除所有广告内容、网址和推广信息（例如 `[y5y4.com]` 或 `【高清剧集网发布 www.DDHDTV.com】`）。
-- **输出**: 返回一个精简后的标题字符串。
+- **规则**:
+  1. 仅输出作品名称和剧集信息，移除所有其他内容（广告、网址、推广信息、画质、格式等）。
+  2. 作品名称：如有多个作品名称或多个语言版本，按英语 → 汉语 → 其他语言的顺序全部输出，用空格分隔。
+  3. 剧集信息：如有多个季数或集数，全部输出（如同时有第二季和第三季输出S02 S03，同时有第二季第三集和第一季第二集输出S01E02 S02E03），如原始标题中没有显示则不输出。
+  4. 格式：作品名称（多个名称用空格分隔）+ 剧集信息（多个季集用空格分隔），中间用空格分隔。
+- **输出**: 返回精简后的标题字符串。
 
 **任务2：计算纯净度分数**
 - **输入**: 文件名列表 (JSON Array)。
@@ -268,8 +268,15 @@ impl GeminiClient {
 
 **任务3：提取标签**
 - **输入**: 原始标题字符串。
-- **规则**: 仅从原始标题中提取关键信息作为标签（例如 "4K", "1080p", "蓝光", "中字"）。
-- **输出**: 返回一个包含标签的字符串数组。
+- **规则**:
+  1. **严格按顺序**提取以下4类标签，每类最多1个，总共最多4个标签：
+     - **画质**: 使用标准格式（如720p、1080p、4K、8K等）
+     - **语言**: 使用英语输出（如Chinese、Korean、Japanese、English等）
+     - **字幕**: 按字幕语言输出（如Chinese Sub、English Sub、Korean Sub等）
+     - **特殊格式**: 使用英语输出（如BluRay、Dolby、HDR、DV等）
+  2. 如果某类信息无法从原始标题中获取，该位置留空，不要编造。
+  3. 严格按照上述顺序排列，最多输出4个标签。
+- **输出**: 返回包含标签的字符串数组，最多4个元素。
 
 **输入数据:**
 - **原始标题**: "{}"
@@ -284,9 +291,9 @@ impl GeminiClient {
 **示例输出:**
 ```json
 {{
-  "cleaned_title": "庆余年.第1季.全46集.4K高清",
+  "cleaned_title": "Transformers Batman 变形金刚 蝙蝠侠 S01E02 S02E03",
   "purity_score": 95,
-  "tags": ["4K", "高清"]
+  "tags": ["4K", "Chinese", "Chinese Sub", "BluRay"]
 }}
 ```
 "#,
@@ -340,29 +347,8 @@ impl GeminiClient {
 }
 
 // --- 6. 公共API函数 ---
-
-/// **公共接口 - 第一阶段**: 从HTML提取信息。
-pub async fn batch_extract_basic_info_from_html(
-    html_content: String,
-    config: &LlmConfig,
-) -> Result<BatchExtractBasicInfoResult> {
-    let client = GeminiClient::new(config.clone());
-    client
-        .batch_extract_basic_info_from_html(&html_content)
-        .await
-}
-
-/// **公共接口 - 第二阶段**: 分析文件列表并返回最终整合结果。
-/// 注意：此函数现在返回一个元组，因为最终的DetailedAnalysisResult需要在调用方构建，
-/// 因为调用方持有第一阶段的结果（magnet_link, file_size）。
-pub async fn batch_analyze_scores_and_tags(
-    original_title: &str,
-    file_list: &[String],
-    config: &LlmConfig,
-) -> Result<(String, u8, Vec<String>)> {
-    let client = GeminiClient::new(config.clone());
-    client.batch_analyze_scores_and_tags(original_title, file_list).await
-}
+// 注意：原有的公共API函数已被删除，因为它们未被使用
+// 所有AI调用现在都通过LlmClient trait进行
 
 /// 测试与LLM提供商的连接。
 pub async fn test_connection(config: &LlmConfig) -> Result<String> {
