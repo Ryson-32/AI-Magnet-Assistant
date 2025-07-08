@@ -122,6 +122,22 @@
               required
             />
           </div>
+
+          <div class="form-group">
+            <label for="analysisBatchSize">Batch Size</label>
+            <input
+              id="analysisBatchSize"
+              v-model.number="llmConfig.analysis_config.batch_size"
+              type="number"
+              min="1"
+              max="20"
+              placeholder="5"
+              required
+            />
+            <small class="help-text">
+              Number of search results to analyze in a single API call (1-20). Lower values are faster but may hit rate limits due to more frequent requests.
+            </small>
+          </div>
         </div>
       </div>
 
@@ -196,6 +212,10 @@
             </a>
           </div>
         </div>
+
+        <button type="button" @click="testBatchAnalysis" :disabled="isTestingBatch" class="test-batch-btn">
+          {{ isTestingBatch ? 'Testing...' : 'Test Batch Analysis' }}
+        </button>
 
         <button type="button" @click="saveLlmConfig" :disabled="isSaving" class="save-btn">
           {{ isSaving ? 'Saving...' : 'Save All Settings' }}
@@ -275,12 +295,14 @@ const llmConfig = ref({
     api_key: "",
     api_base: "https://generativelanguage.googleapis.com",
     model: "gemini-2.5-flash-lite-preview-06-17",
+    batch_size: 5,
   }
 });
 
 const isSaving = ref(false);
 const isTestingExtraction = ref(false);
 const isTestingAnalysis = ref(false);
+const isTestingBatch = ref(false);
 const showRateLimit = ref(false);
 let hideTimeout: number | null = null;
 
@@ -302,9 +324,17 @@ watch(() => llmConfig.value.analysis_config.provider, (newProvider) => {
   if (newProvider === 'gemini') {
     llmConfig.value.analysis_config.api_base = 'https://generativelanguage.googleapis.com';
     llmConfig.value.analysis_config.model = 'gemini-2.5-flash-lite-preview-06-17';
+    // Keep existing batch_size or set default if not set
+    if (!llmConfig.value.analysis_config.batch_size) {
+      llmConfig.value.analysis_config.batch_size = 5;
+    }
   } else if (newProvider === 'openai') {
     llmConfig.value.analysis_config.api_base = 'https://api.openai.com/v1';
     llmConfig.value.analysis_config.model = 'gpt-3.5-turbo';
+    // Keep existing batch_size or set default if not set
+    if (!llmConfig.value.analysis_config.batch_size) {
+      llmConfig.value.analysis_config.batch_size = 5;
+    }
   }
 });
 
@@ -313,6 +343,10 @@ async function loadLlmConfig() {
     const saved = await invoke("get_llm_config");
     if (saved) {
       llmConfig.value = { ...llmConfig.value, ...saved };
+      // Ensure batch_size has a default value for backward compatibility
+      if (!llmConfig.value.analysis_config.batch_size) {
+        llmConfig.value.analysis_config.batch_size = 5;
+      }
     }
   } catch (error) {
     console.error("Failed to load LLM config:", error);
@@ -367,6 +401,25 @@ async function testAnalysisConnection() {
     alert(`Analysis connection failed: ${error}`);
   } finally {
     isTestingAnalysis.value = false;
+  }
+}
+
+async function testBatchAnalysis() {
+  if (!llmConfig.value.analysis_config.api_key.trim()) {
+    alert("Please enter an API key for analysis config first");
+    return;
+  }
+
+  isTestingBatch.value = true;
+  try {
+    console.log("Testing batch analysis with batch_size:", llmConfig.value.analysis_config.batch_size);
+    const result = await invoke("test_batch_analysis");
+    alert(`Batch analysis test result: ${result}`);
+  } catch (error) {
+    console.error("Batch analysis test failed:", error);
+    alert(`Batch analysis test failed: ${error}`);
+  } finally {
+    isTestingBatch.value = false;
   }
 }
 
@@ -710,6 +763,30 @@ async function openConfigFolder() {
     opacity: 1;
     transform: translateY(0);
   }
+}
+
+.test-batch-btn {
+  padding: 10px 20px;
+  background: #f59e0b;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  margin-right: 12px;
+}
+
+.test-batch-btn:hover:not(:disabled) {
+  background: #d97706;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
+}
+
+.test-batch-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
 }
 
 .save-btn {

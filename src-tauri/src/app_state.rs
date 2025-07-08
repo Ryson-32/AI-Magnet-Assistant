@@ -42,6 +42,12 @@ pub struct SingleLlmConfig {
     pub api_key: String,
     pub api_base: String,
     pub model: String,
+    #[serde(default = "default_batch_size")]
+    pub batch_size: u32,
+}
+
+fn default_batch_size() -> u32 {
+    5
 }
 
 impl Default for SingleLlmConfig {
@@ -51,6 +57,7 @@ impl Default for SingleLlmConfig {
             api_key: "".to_string(),
             api_base: "https://generativelanguage.googleapis.com".to_string(),
             model: "gemini-2.5-flash-lite-preview-06-17".to_string(),
+            batch_size: default_batch_size(),
         }
     }
 }
