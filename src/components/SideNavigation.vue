@@ -3,9 +3,9 @@
     <div class="nav-header">
       <h2 class="app-title">
         <div class="app-icon">🧲</div>
-        <div class="app-text">
-          <div class="app-title-line1">MagnetLink</div>
-          <div class="app-title-line2">Optimizer Pro</div>
+        <div class="app-text-container">
+          <div class="app-title-line1">AI Magnet</div>
+          <div class="app-title-line2">Assistant</div>
         </div>
       </h2>
     </div>
@@ -27,6 +27,11 @@
         <span class="nav-icon">⚙️</span>
         <span class="nav-label">Settings</span>
       </div>
+    </div>
+    <div class="footer-links">
+      <a href="https://github.com/Ryson-32/AI-Magnet-Assistant" target="_blank" rel="noopener noreferrer">
+        <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="#000000" class="feather feather-github"><path d="M9 19c-5 1.5-5-2.5-7-3m14 6v-3.87a3.37 3.37 0 0 0-.94-2.61c3.14-.35 6.44-1.54 6.44-7A5.44 5.44 0 0 0 20 4.77 5.07 5.07 0 0 0 19.91 1S18.73.65 16 2.48a13.38 13.38 0 0 0-7 0C6.27.65 5.09 1 5.09 1A5.07 5.07 0 0 0 5 4.77a5.44 5.44 0 0 0-1.5 3.78c0 5.42 3.3 6.61 6.44 7A3.37 3.37 0 0 0 9 18.13V22"></path></svg>
+      </a>
     </div>
   </div>
 </template>
@@ -77,39 +82,41 @@ const menuItems: MenuItem[] = [
   display: flex;
   align-items: center;
   justify-content: flex-start;
-  gap: 12px;
-  padding-left: 8px;
+  gap: 8px;
+  padding-left: 12px;
 }
 
 .app-icon {
-  font-size: 24px;
+  font-size: 28px;
   line-height: 1;
   display: flex;
   align-items: center;
 }
 
-.app-text {
+.app-text-container {
   display: flex;
   flex-direction: column;
+  justify-content: center;
+  align-items: center;
+}
+
+.app-title-line1,
+.app-title-line2 {
+  font-weight: 700;
+  color: #1e293b;
   line-height: 1.3;
-  text-align: center;
 }
 
 .app-title-line1 {
-  font-size: 16px;
-  font-weight: 700;
-  color: #1e293b;
-  margin-bottom: 4px;
+  font-size: 1.4rem;
 }
 
 .app-title-line2 {
-  font-size: 16px;
-  font-weight: 700;
-  color: #1e293b;
+  font-size: 1.4rem;
 }
 
 .nav-menu {
-  flex: 1;
+  flex-grow: 1;
   padding: 20px 0;
 }
 
@@ -138,6 +145,9 @@ const menuItems: MenuItem[] = [
   margin-right: 12px;
   width: 24px;
   text-align: center;
+  display: flex;
+  align-items: center;
+  justify-content: center;
 }
 
 .nav-label {
@@ -148,5 +158,23 @@ const menuItems: MenuItem[] = [
 .nav-footer {
   padding: 16px 0;
   border-top: 1px solid #e2e8f0;
+}
+
+.footer-links {
+  display: flex;
+  justify-content: flex-start;
+  padding: 16px;
+  gap: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.footer-links a {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.footer-links a:hover svg {
+  fill: #3b82f6; /* Highlight color on hover */
 }
 </style>

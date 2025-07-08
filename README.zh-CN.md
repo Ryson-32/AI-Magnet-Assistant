@@ -28,7 +28,7 @@
 
 1.  克隆代码仓库：
     ```bash
-    git clone https://github.com/your-username/ai-magnet-assistant.git
+    git clone https://github.com/Ryson-32/AI-Magnet-Assistant.git
     cd ai-magnet-assistant
     ```
 
