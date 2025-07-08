@@ -61,7 +61,7 @@ Before you begin, ensure you have the following installed:
 
 1.  **Clone the Repository**:
     ```bash
-    git clone https://github.com/your-username/ai-magnet-assistant.git
+    git clone https://github.com/Ryson-32/AI-Magnet-Assistant.git
     cd ai-magnet-assistant
     ```
 

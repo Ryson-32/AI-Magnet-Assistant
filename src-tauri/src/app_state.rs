@@ -35,22 +35,38 @@ pub struct PriorityKeyword {
     pub keyword: String,
 }
 
-/// LLM 配置
+/// 单个LLM配置
 #[derive(Debug, Clone, Serialize, Deserialize)]
-pub struct LlmConfig {
+pub struct SingleLlmConfig {
     pub provider: String,
     pub api_key: String,
     pub api_base: String,
     pub model: String,
 }
 
-impl Default for LlmConfig {
+impl Default for SingleLlmConfig {
     fn default() -> Self {
         Self {
             provider: "gemini".to_string(),
             api_key: "".to_string(),
-            api_base: "https://generativelanguage.googleapis.com/v1beta".to_string(),
-            model: "gemini-2.5-flash".to_string(),
+            api_base: "https://generativelanguage.googleapis.com".to_string(),
+            model: "gemini-2.5-flash-lite-preview-06-17".to_string(),
+        }
+    }
+}
+
+/// 双LLM配置 - 分别用于第一次和第二次API调用
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct LlmConfig {
+    pub extraction_config: SingleLlmConfig,  // 第一次API调用：从HTML提取基础信息
+    pub analysis_config: SingleLlmConfig,    // 第二次API调用：分析分数和标签
+}
+
+impl Default for LlmConfig {
+    fn default() -> Self {
+        Self {
+            extraction_config: SingleLlmConfig::default(),
+            analysis_config: SingleLlmConfig::default(),
         }
     }
 }
@@ -360,6 +376,32 @@ pub fn get_llm_config(state: &AppState) -> LlmConfig {
 pub fn update_llm_config(state: &AppState, config: LlmConfig) -> Result<()> {
     let mut data = state.lock().unwrap();
     data.llm_config = config;
+    Ok(())
+}
+
+/// 获取提取配置（第一次API调用）
+pub fn get_extraction_config(state: &AppState) -> SingleLlmConfig {
+    let data = state.lock().unwrap();
+    data.llm_config.extraction_config.clone()
+}
+
+/// 获取分析配置（第二次API调用）
+pub fn get_analysis_config(state: &AppState) -> SingleLlmConfig {
+    let data = state.lock().unwrap();
+    data.llm_config.analysis_config.clone()
+}
+
+/// 更新提取配置
+pub fn update_extraction_config(state: &AppState, config: SingleLlmConfig) -> Result<()> {
+    let mut data = state.lock().unwrap();
+    data.llm_config.extraction_config = config;
+    Ok(())
+}
+
+/// 更新分析配置
+pub fn update_analysis_config(state: &AppState, config: SingleLlmConfig) -> Result<()> {
+    let mut data = state.lock().unwrap();
+    data.llm_config.analysis_config = config;
     Ok(())
 }
 

@@ -5,6 +5,29 @@ use async_trait::async_trait;
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
+/// 智能处理API Base URL，为不同的API服务添加正确的路径
+fn normalize_api_base(api_base: &str) -> String {
+    // 移除末尾的斜杠，避免双斜杠问题
+    let trimmed_base = api_base.trim_end_matches('/');
+
+    // 如果是官方Gemini域名且没有包含/v1beta，则自动添加
+    if trimmed_base == "https://generativelanguage.googleapis.com" {
+        format!("{}/v1beta", trimmed_base)
+    } else if trimmed_base.starts_with("https://generativelanguage.googleapis.com") && !trimmed_base.contains("/v1beta") {
+        format!("{}/v1beta", trimmed_base)
+    } else if (trimmed_base.starts_with("http://") || trimmed_base.starts_with("https://"))
+        && !trimmed_base.contains("/v1beta")
+        && !trimmed_base.contains("/api/")
+        && !trimmed_base.contains("/v1/") {
+        // 对于自定义代理服务器，如果没有包含API路径，尝试添加/v1beta
+        // 这适用于Gemini Balance等代理服务
+        format!("{}/v1beta", trimmed_base)
+    } else {
+        // 对于其他URL（包括已经包含路径的自定义代理），保持原样但移除末尾斜杠
+        trimmed_base.to_string()
+    }
+}
+
 // --- 0. 公共配置 ---
 
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -63,6 +86,7 @@ pub trait LlmClient: Send + Sync {
     async fn batch_extract_basic_info_from_html(
         &self,
         html_content: &str,
+        extraction_config: &LlmConfig,
     ) -> Result<BatchExtractBasicInfoResult>;
 
     /// 第二阶段：根据文件列表批量分析分数和标签
@@ -70,18 +94,18 @@ pub trait LlmClient: Send + Sync {
         &self,
         original_title: &str,
         file_list: &[String],
+        analysis_config: &LlmConfig,
     ) -> Result<(String, u8, Vec<String>)>;
 }
 
 pub struct GeminiClient {
-    config: LlmConfig,
     client: Client,
 }
 
 impl GeminiClient {
-    pub fn new(config: LlmConfig) -> Self {
+    pub fn new() -> Self {
         let client = Client::new();
-        Self { config, client }
+        Self { client }
     }
 }
 
@@ -90,16 +114,18 @@ impl LlmClient for GeminiClient {
     async fn batch_extract_basic_info_from_html(
         &self,
         html_content: &str,
+        extraction_config: &LlmConfig,
     ) -> Result<BatchExtractBasicInfoResult> {
-        self.batch_extract_basic_info_impl(html_content).await
+        self.batch_extract_basic_info_impl(html_content, extraction_config).await
     }
 
     async fn batch_analyze_scores_and_tags(
         &self,
         original_title: &str,
         file_list: &[String],
+        analysis_config: &LlmConfig,
     ) -> Result<(String, u8, Vec<String>)> {
-        self.batch_analyze_scores_and_tags_impl(original_title, file_list)
+        self.batch_analyze_scores_and_tags_impl(original_title, file_list, analysis_config)
             .await
     }
 }
@@ -149,10 +175,12 @@ impl GeminiClient {
     async fn batch_extract_basic_info_impl(
         &self,
         html_content: &str,
+        config: &LlmConfig,
     ) -> Result<BatchExtractBasicInfoResult> {
+        let normalized_base = normalize_api_base(&config.api_base);
         let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-            self.config.model, self.config.api_key
+            "{}/models/{}:generateContent?key={}",
+            normalized_base, config.model, config.api_key
         );
 
         let prompt = format!(
@@ -234,10 +262,12 @@ impl GeminiClient {
         &self,
         original_title: &str,
         file_list: &[String],
+        config: &LlmConfig,
     ) -> Result<(String, u8, Vec<String>)> {
+        let normalized_base = normalize_api_base(&config.api_base);
         let url = format!(
-            "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-            self.config.model, self.config.api_key
+            "{}/models/{}:generateContent?key={}",
+            normalized_base, config.model, config.api_key
         );
 
         let files_json_array = serde_json::to_string(file_list)?;
@@ -352,10 +382,16 @@ impl GeminiClient {
 
 /// 测试与LLM提供商的连接。
 pub async fn test_connection(config: &LlmConfig) -> Result<String> {
+    let normalized_base = normalize_api_base(&config.api_base);
     let url = format!(
-        "https://generativelanguage.googleapis.com/v1beta/models/{}:generateContent?key={}",
-        config.model, config.api_key
+        "{}/models/{}:generateContent?key={}",
+        normalized_base, config.model, config.api_key
     );
+
+    // 添加调试信息帮助用户诊断问题
+    println!("🔧 [连接测试] 原始URL: {}", config.api_base);
+    println!("🔧 [连接测试] 标准化URL: {}", normalized_base);
+    println!("🔧 [连接测试] 完整请求URL: {}", url);
     let request_body = GeminiRequest {
         contents: vec![Content {
             parts: vec![Part {
@@ -366,10 +402,26 @@ pub async fn test_connection(config: &LlmConfig) -> Result<String> {
     let client = Client::new();
     let response = client.post(&url).json(&request_body).send().await?;
 
-    if response.status().is_success() {
+    let status = response.status();
+    println!("🔧 [连接测试] 响应状态码: {}", status);
+
+    if status.is_success() {
+        println!("✅ [连接测试] 连接成功！");
         Ok("连接成功".to_string())
     } else {
         let error_body = response.text().await.unwrap_or_default();
-        Err(anyhow::anyhow!("API连接失败: {}", error_body))
+        println!("❌ [连接测试] 错误响应: {}", error_body);
+
+        // 为常见错误提供更友好的提示
+        let error_message = match status.as_u16() {
+            401 => "认证失败：请检查API Key是否正确".to_string(),
+            403 => "访问被拒绝：请检查API Key权限".to_string(),
+            404 => "API路径不存在：请检查API Base URL是否正确".to_string(),
+            405 => "请求方法不允许：API路径可能不正确".to_string(),
+            500 => "服务器内部错误：可能是API Key无效或模型名称错误".to_string(),
+            _ => format!("API连接失败 (状态码: {})", status),
+        };
+
+        Err(anyhow::anyhow!("{}: {}", error_message, error_body))
     }
 }
