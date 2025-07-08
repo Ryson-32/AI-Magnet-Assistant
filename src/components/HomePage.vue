@@ -325,7 +325,7 @@ async function analyzeResults() {
     const batchSize = llmConfig.analysis_config?.batch_size || 5;
 
     // 只分析尚未分析的结果
-    const unanalyzedResults = results.value.filter(result => !result.analysis);
+    const unanalyzedResults = results.value.filter((result: any) => !result.analysis);
     const alreadyAnalyzedCount = results.value.length - unanalyzedResults.length;
 
     if (unanalyzedResults.length === 0) {
