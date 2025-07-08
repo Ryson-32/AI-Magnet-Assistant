@@ -147,7 +147,7 @@
             <svg class="table-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
               <path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z" fill="currentColor"/>
             </svg>
-            <span class="rate-limit-text">Rate Limits</span>
+            <span class="rate-limit-text">Rate Limits Table</span>
 
             <!-- 悬停显示的速率限制表格 -->
             <div v-if="showRateLimit" class="rate-limit-tooltip" @mouseenter="clearHideTimeout" @mouseleave="hideRateLimit">
@@ -213,10 +213,6 @@
           </div>
         </div>
 
-        <button type="button" @click="testBatchAnalysis" :disabled="isTestingBatch" class="test-batch-btn">
-          {{ isTestingBatch ? 'Testing...' : 'Test Batch Analysis' }}
-        </button>
-
         <button type="button" @click="saveLlmConfig" :disabled="isSaving" class="save-btn">
           {{ isSaving ? 'Saving...' : 'Save All Settings' }}
         </button>
@@ -278,10 +274,13 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch } from 'vue';
+import { ref, onMounted, watch, inject } from 'vue';
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir } from '@tauri-apps/api/path';
 import { openPath, revealItemInDir } from '@tauri-apps/plugin-opener';
+
+// 注入全局通知函数
+const showNotification = inject('showNotification') as (message: string, type?: 'success' | 'error', duration?: number) => void;
 
 const llmConfig = ref({
   extraction_config: {
@@ -302,9 +301,9 @@ const llmConfig = ref({
 const isSaving = ref(false);
 const isTestingExtraction = ref(false);
 const isTestingAnalysis = ref(false);
-const isTestingBatch = ref(false);
 const showRateLimit = ref(false);
 let hideTimeout: number | null = null;
+
 
 onMounted(async () => {
   await loadLlmConfig();
@@ -359,10 +358,10 @@ async function saveLlmConfig() {
     console.log("Saving LLM config:", llmConfig.value);
     await invoke("update_llm_config", { config: llmConfig.value });
     console.log("LLM config saved successfully to app_data.json");
-    alert("Settings saved successfully!");
+    showNotification("Settings saved successfully!");
   } catch (error) {
     console.error("Failed to save LLM config:", error);
-    alert(`Failed to save settings: ${error}`);
+    showNotification(`Failed to save settings: ${error}`, 'error');
   } finally {
     isSaving.value = false;
   }
@@ -370,17 +369,17 @@ async function saveLlmConfig() {
 
 async function testExtractionConnection() {
   if (!llmConfig.value.extraction_config.api_key.trim()) {
-    alert("Please enter an API key for extraction config first");
+    showNotification("Please enter an API key for extraction config first", 'error');
     return;
   }
 
   isTestingExtraction.value = true;
   try {
     const result = await invoke("test_extraction_connection", { config: llmConfig.value.extraction_config });
-    alert(`Extraction connection successful: ${result}`);
+    showNotification(`Extraction connection successful: ${result}`);
   } catch (error) {
     console.error("Extraction API connection test failed:", error);
-    alert(`Extraction connection failed: ${error}`);
+    showNotification(`Extraction connection failed: ${error}`, 'error');
   } finally {
     isTestingExtraction.value = false;
   }
@@ -388,38 +387,19 @@ async function testExtractionConnection() {
 
 async function testAnalysisConnection() {
   if (!llmConfig.value.analysis_config.api_key.trim()) {
-    alert("Please enter an API key for analysis config first");
+    showNotification("Please enter an API key for analysis config first", 'error');
     return;
   }
 
   isTestingAnalysis.value = true;
   try {
     const result = await invoke("test_analysis_connection", { config: llmConfig.value.analysis_config });
-    alert(`Analysis connection successful: ${result}`);
+    showNotification(`Analysis connection successful: ${result}`);
   } catch (error) {
     console.error("Analysis API connection test failed:", error);
-    alert(`Analysis connection failed: ${error}`);
+    showNotification(`Analysis connection failed: ${error}`, 'error');
   } finally {
     isTestingAnalysis.value = false;
-  }
-}
-
-async function testBatchAnalysis() {
-  if (!llmConfig.value.analysis_config.api_key.trim()) {
-    alert("Please enter an API key for analysis config first");
-    return;
-  }
-
-  isTestingBatch.value = true;
-  try {
-    console.log("Testing batch analysis with batch_size:", llmConfig.value.analysis_config.batch_size);
-    const result = await invoke("test_batch_analysis");
-    alert(`Batch analysis test result: ${result}`);
-  } catch (error) {
-    console.error("Batch analysis test failed:", error);
-    alert(`Batch analysis test failed: ${error}`);
-  } finally {
-    isTestingBatch.value = false;
   }
 }
 
@@ -452,7 +432,7 @@ async function openConfigFolder() {
       await openPath(dir);
     } catch (fallbackError) {
       console.error("Fallback openPath also failed:", fallbackError);
-      alert(`Could not open folder: ${fallbackError}`);
+      showNotification(`Could not open folder: ${fallbackError}`, 'error');
     }
   }
 }
@@ -765,29 +745,7 @@ async function openConfigFolder() {
   }
 }
 
-.test-batch-btn {
-  padding: 10px 20px;
-  background: #f59e0b;
-  color: white;
-  border: none;
-  border-radius: 8px;
-  font-size: 14px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: all 0.2s;
-  margin-right: 12px;
-}
 
-.test-batch-btn:hover:not(:disabled) {
-  background: #d97706;
-  transform: translateY(-1px);
-  box-shadow: 0 4px 12px rgba(245, 158, 11, 0.3);
-}
-
-.test-batch-btn:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
 
 .save-btn {
   padding: 12px 24px;
