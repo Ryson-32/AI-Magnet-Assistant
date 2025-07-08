@@ -135,22 +135,8 @@ async fn search_multi_page(
     // 获取LLM配置
     let llm_config = app_state::get_llm_config(&state);
 
-    // 检查是否有有效的API密钥
-    let has_extraction_config = !llm_config.extraction_config.api_key.is_empty();
-    let has_analysis_config = !llm_config.analysis_config.api_key.is_empty();
-
-    println!("🔧 LLM Config: Extraction={}, Analysis={}", has_extraction_config, has_analysis_config);
-
-    // 分离 clmclm.com 和自定义搜索引擎
-    let clmclm_enabled = enabled_engines.iter().any(|e| &e.name == "clmclm.com");
-    let custom_engines: Vec<_> = enabled_engines.iter()
-        .filter(|e| &e.name != "clmclm.com")
-        .map(|e| (e.name.clone(), e.url_template.clone()))
-        .collect();
-
-    // 转换为llm_service::LlmConfig格式
-    let extraction_config = if has_extraction_config {
-        println!("🔧 Extraction Config: batch_size={}", llm_config.extraction_config.batch_size);
+    // 转换为Option<LlmConfig>格式
+    let extraction_config = if !llm_config.extraction_config.api_key.is_empty() {
         Some(llm_service::LlmConfig {
             provider: llm_config.extraction_config.provider.clone(),
             api_key: llm_config.extraction_config.api_key.clone(),
@@ -162,8 +148,7 @@ async fn search_multi_page(
         None
     };
 
-    let analysis_config = if has_analysis_config {
-        println!("🔧 Analysis Config: batch_size={}", llm_config.analysis_config.batch_size);
+    let analysis_config = if !llm_config.analysis_config.api_key.is_empty() {
         Some(llm_service::LlmConfig {
             provider: llm_config.analysis_config.provider.clone(),
             api_key: llm_config.analysis_config.api_key.clone(),
@@ -175,14 +160,25 @@ async fn search_multi_page(
         None
     };
 
+    // 分离clmclm和其他搜索引擎
+    let clmclm_enabled = enabled_engines.iter().any(|e| e.name == "clmclm.com");
+    let custom_engines: Vec<_> = enabled_engines.into_iter()
+        .filter(|e| e.name != "clmclm.com")
+        .collect();
+
+    // 转换custom_engines为(String, String)格式
+    let custom_engine_tuples: Vec<(String, String)> = custom_engines.iter()
+        .map(|e| (e.name.clone(), e.url_template.clone()))
+        .collect();
+
     // 创建搜索核心，只包含启用的搜索引擎
-    let search_core = if !custom_engines.is_empty() || clmclm_enabled {
-        println!("🔧 Creating search core: {} custom engines, clmclm.com: {}", custom_engines.len(), clmclm_enabled);
+    let search_core = if !custom_engine_tuples.is_empty() || clmclm_enabled {
+        println!("🔧 Creating search core: {} custom engines, clmclm.com: {}", custom_engine_tuples.len(), clmclm_enabled);
         searcher::create_ai_enhanced_search_core(
             extraction_config,
             analysis_config,
             priority_keyword_strings,
-            custom_engines,
+            custom_engine_tuples,
             clmclm_enabled
         )
     } else {
@@ -191,6 +187,141 @@ async fn search_multi_page(
 
     search_core.search_multi_page(keyword.as_str(), pages).await.map_err(|e| e.to_string())
 }
+
+#[tauri::command]
+async fn search_clmclm_first(
+    state: tauri::State<'_, app_state::AppState>,
+    keyword: String,
+    max_pages: Option<u32>,
+) -> Result<Vec<searcher::SearchResult>, String> {
+    let pages = max_pages.unwrap_or(3);
+
+    // 获取启用的搜索引擎
+    let engines = app_state::get_all_engines(&state);
+    let clmclm_enabled = engines.iter().any(|e| e.name == "clmclm.com" && e.is_enabled);
+
+    if !clmclm_enabled {
+        return Ok(Vec::new());
+    }
+
+    // 获取优先关键词
+    let priority_keywords = app_state::get_all_priority_keywords(&state);
+    let priority_keyword_strings: Vec<String> = priority_keywords.iter()
+        .map(|pk| pk.keyword.clone())
+        .collect();
+
+    // 获取LLM配置
+    let llm_config = app_state::get_llm_config(&state);
+
+    // 转换为Option<LlmConfig>格式
+    let extraction_config = if !llm_config.extraction_config.api_key.is_empty() {
+        Some(llm_service::LlmConfig {
+            provider: llm_config.extraction_config.provider.clone(),
+            api_key: llm_config.extraction_config.api_key.clone(),
+            api_base: llm_config.extraction_config.api_base.clone(),
+            model: llm_config.extraction_config.model.clone(),
+            batch_size: llm_config.extraction_config.batch_size,
+        })
+    } else {
+        None
+    };
+
+    let analysis_config = if !llm_config.analysis_config.api_key.is_empty() {
+        Some(llm_service::LlmConfig {
+            provider: llm_config.analysis_config.provider.clone(),
+            api_key: llm_config.analysis_config.api_key.clone(),
+            api_base: llm_config.analysis_config.api_base.clone(),
+            model: llm_config.analysis_config.model.clone(),
+            batch_size: llm_config.analysis_config.batch_size,
+        })
+    } else {
+        None
+    };
+
+    // 只创建clmclm搜索核心
+    println!("🔧 Creating clmclm-only search core");
+    let search_core = searcher::create_ai_enhanced_search_core(
+        extraction_config,
+        analysis_config,
+        priority_keyword_strings,
+        Vec::new(), // 没有自定义引擎
+        true // 只启用clmclm
+    );
+
+    search_core.search_multi_page(keyword.as_str(), pages).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn search_other_engines(
+    state: tauri::State<'_, app_state::AppState>,
+    keyword: String,
+    max_pages: Option<u32>,
+) -> Result<Vec<searcher::SearchResult>, String> {
+    let pages = max_pages.unwrap_or(3);
+
+    // 获取启用的搜索引擎（除了clmclm）
+    let engines = app_state::get_all_engines(&state);
+    let custom_engines: Vec<_> = engines.into_iter()
+        .filter(|e| e.is_enabled && e.name != "clmclm.com")
+        .collect();
+
+    if custom_engines.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // 获取优先关键词
+    let priority_keywords = app_state::get_all_priority_keywords(&state);
+    let priority_keyword_strings: Vec<String> = priority_keywords.iter()
+        .map(|pk| pk.keyword.clone())
+        .collect();
+
+    // 获取LLM配置
+    let llm_config = app_state::get_llm_config(&state);
+
+    // 转换为Option<LlmConfig>格式
+    let extraction_config = if !llm_config.extraction_config.api_key.is_empty() {
+        Some(llm_service::LlmConfig {
+            provider: llm_config.extraction_config.provider.clone(),
+            api_key: llm_config.extraction_config.api_key.clone(),
+            api_base: llm_config.extraction_config.api_base.clone(),
+            model: llm_config.extraction_config.model.clone(),
+            batch_size: llm_config.extraction_config.batch_size,
+        })
+    } else {
+        None
+    };
+
+    let analysis_config = if !llm_config.analysis_config.api_key.is_empty() {
+        Some(llm_service::LlmConfig {
+            provider: llm_config.analysis_config.provider.clone(),
+            api_key: llm_config.analysis_config.api_key.clone(),
+            api_base: llm_config.analysis_config.api_base.clone(),
+            model: llm_config.analysis_config.model.clone(),
+            batch_size: llm_config.analysis_config.batch_size,
+        })
+    } else {
+        None
+    };
+
+    // 转换custom_engines为(String, String)格式
+    let custom_engine_tuples: Vec<(String, String)> = custom_engines.iter()
+        .map(|e| (e.name.clone(), e.url_template.clone()))
+        .collect();
+
+    // 只创建其他引擎的搜索核心
+    println!("🔧 Creating other-engines search core: {} engines", custom_engine_tuples.len());
+    let search_core = searcher::create_ai_enhanced_search_core(
+        extraction_config,
+        analysis_config,
+        priority_keyword_strings,
+        custom_engine_tuples,
+        false // 不启用clmclm
+    );
+
+    search_core.search_multi_page(keyword.as_str(), pages).await.map_err(|e| e.to_string())
+}
+
+
 
 // ============ 搜索引擎相关命令 ============
 
@@ -321,53 +452,7 @@ async fn get_llm_config(state: tauri::State<'_, app_state::AppState>) -> Result<
     Ok(config)
 }
 
-#[tauri::command]
-async fn test_batch_analysis(state: tauri::State<'_, app_state::AppState>) -> Result<String, String> {
-    let config = app_state::get_llm_config(&state);
 
-    println!("🧪 Testing batch analysis... (batch_size={})", config.analysis_config.batch_size);
-
-    // 创建测试数据
-    let test_items = vec![
-        llm_service::BatchAnalysisItem {
-            title: "Test Movie 2024 1080p BluRay".to_string(),
-            file_list: vec![
-                "Test.Movie.2024.1080p.BluRay.x264.mkv".to_string(),
-                "Sample.mkv".to_string(),
-            ],
-        },
-        llm_service::BatchAnalysisItem {
-            title: "Another Movie S01E01".to_string(),
-            file_list: vec![
-                "Another.Movie.S01E01.1080p.WEB-DL.mkv".to_string(),
-                "Subtitles.srt".to_string(),
-            ],
-        },
-    ];
-
-    // 转换配置
-    let llm_config = llm_service::LlmConfig {
-        provider: config.analysis_config.provider,
-        api_key: config.analysis_config.api_key,
-        api_base: config.analysis_config.api_base,
-        model: config.analysis_config.model,
-        batch_size: config.analysis_config.batch_size,
-    };
-
-    // 测试批量分析
-    let client = llm_service::GeminiClient::new();
-    match client.batch_analyze_multiple_items(&test_items, &llm_config).await {
-        Ok(results) => {
-            println!("🧪 [TEST] Batch analysis succeeded with {} results", results.len());
-            Ok(format!("Batch analysis test successful! Processed {} items with batch_size={}",
-                      results.len(), config.analysis_config.batch_size))
-        }
-        Err(e) => {
-            println!("🧪 [TEST] Batch analysis failed: {}", e);
-            Err(format!("Batch analysis test failed: {}", e))
-        }
-    }
-}
 
 #[tauri::command]
 async fn batch_analyze_resources(
@@ -469,28 +554,44 @@ async fn batch_analyze_resources(
                     continue;
                 }
 
-                // 回退到单个分析（但限制重试次数）
+                // 回退到单个分析（使用批量分析处理单个项目）
                 for (i, item) in chunk.iter().enumerate() {
                     if let Some(original_result) = results.get(batch_index * batch_size + i) {
+                        // 将单个项目包装为批量格式
+                        let single_item = vec![item.clone()];
+
                         // 单个分析只尝试一次，不进行重试
                         match tokio::time::timeout(
                             std::time::Duration::from_secs(30), // 30秒超时
-                            client.try_single_analyze_scores_and_tags(&item.title, &item.file_list, &llm_config)
+                            client.batch_analyze_multiple_items(&single_item, &llm_config)
                         ).await {
-                            Ok(Ok((cleaned_title, score, tags))) => {
-                                all_results.push(llm_service::DetailedAnalysisResult {
-                                    title: if cleaned_title.is_empty() {
-                                        clean_title_fallback(&original_result.title)
-                                    } else {
-                                        cleaned_title
-                                    },
-                                    purity_score: score,
-                                    tags,
-                                    magnet_link: original_result.magnet_link.clone(),
-                                    file_size: original_result.file_size.clone(),
-                                    file_list: original_result.file_list.clone(),
-                                    error: None,
-                                });
+                            Ok(Ok(mut batch_results)) => {
+                                if let Some(result) = batch_results.pop() {
+                                    all_results.push(llm_service::DetailedAnalysisResult {
+                                        title: if result.cleaned_title.is_empty() {
+                                            clean_title_fallback(&original_result.title)
+                                        } else {
+                                            result.cleaned_title
+                                        },
+                                        purity_score: result.purity_score,
+                                        tags: result.tags,
+                                        magnet_link: original_result.magnet_link.clone(),
+                                        file_size: original_result.file_size.clone(),
+                                        file_list: original_result.file_list.clone(),
+                                        error: None,
+                                    });
+                                } else {
+                                    println!("⚠️ Individual analysis for '{}' returned no results", item.title);
+                                    all_results.push(llm_service::DetailedAnalysisResult {
+                                        title: clean_title_fallback(&original_result.title),
+                                        purity_score: 50,
+                                        tags: vec!["No Results".to_string()],
+                                        magnet_link: original_result.magnet_link.clone(),
+                                        file_size: original_result.file_size.clone(),
+                                        file_list: original_result.file_list.clone(),
+                                        error: Some("Individual analysis returned no results".to_string()),
+                                    });
+                                }
                             }
                             Ok(Err(individual_error)) => {
                                 println!("⚠️ Individual analysis for '{}' failed: {}", item.title, individual_error);
@@ -577,10 +678,11 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             search_multi_page,
+            search_clmclm_first,
+            search_other_engines,
             test_connection,
             test_extraction_connection,
             test_analysis_connection,
-            test_batch_analysis,
             analyze_resource,
             batch_analyze_resources,
             // 收藏夹命令

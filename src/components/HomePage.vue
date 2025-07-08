@@ -138,6 +138,8 @@ const titleMustContainKeyword = searchState ? computed({
   set: (val) => searchState.value.titleMustContainKeyword = val
 }) : ref(true);
 
+
+
 // Sort function
 async function sortResults(resultsArray: any[]) {
   // First get priority keywords
@@ -237,24 +239,70 @@ async function search() {
 
     searchStatus.value = `Searching...${modelInfo}`;
 
-    const searchResults = await invoke("search_multi_page", {
+    // 并行启动两个搜索
+    const clmclmPromise = invoke("search_clmclm_first", {
       keyword: keyword.value,
       maxPages: maxPages.value,
     });
 
-    results.value = searchResults as any[];
-    searchStatus.value = `Found ${results.value.length} results${modelInfo}`;
+    const otherEnginesPromise = invoke("search_other_engines", {
+      keyword: keyword.value,
+      maxPages: maxPages.value,
+    });
 
-    // 1. First sort to identify priority items
-    await sortResults(results.value);
+    // 等待clmclm结果（通常更快）
+    try {
+      const clmclmResults = await clmclmPromise;
 
-    // 2. If smart filter is enabled, perform analysis
-    if (useSmartFilter.value && results.value.length > 0) {
-      await analyzeResults();
+      // 立即显示clmclm结果
+      if (clmclmResults && (clmclmResults as any[]).length > 0) {
+        results.value = clmclmResults as any[];
+        searchStatus.value = `Found ${results.value.length} results from clmclm.com, searching other engines...${modelInfo}`;
+
+        // 立即排序和分析clmclm结果
+        await sortResults(results.value);
+
+        if (useSmartFilter.value && results.value.length > 0) {
+          searchStatus.value = `Analyzing clmclm.com results, searching other engines...${modelInfo}`;
+          await analyzeResults();
+          await sortResults(results.value);
+        }
+      }
+    } catch (error) {
+      console.log('clmclm search failed:', error);
+      searchStatus.value = `clmclm.com search failed, waiting for other engines...${modelInfo}`;
     }
 
-    // 3. Sort again to apply AI scores while maintaining priority
-    await sortResults(results.value);
+    // 等待其他引擎结果
+    try {
+      const otherResults = await otherEnginesPromise;
+
+      // 合并其他引擎的结果
+      if (otherResults && (otherResults as any[]).length > 0) {
+        const allResults = [...results.value, ...(otherResults as any[])];
+        results.value = allResults;
+        searchStatus.value = `Found ${results.value.length} total results${modelInfo}`;
+
+        // 重新排序所有结果
+        await sortResults(results.value);
+
+        // 如果启用了智能过滤，分析新增的结果
+        if (useSmartFilter.value && (otherResults as any[]).length > 0) {
+          searchStatus.value = `Analyzing additional results...${modelInfo}`;
+          await analyzeResults();
+          await sortResults(results.value);
+        }
+      }
+    } catch (error) {
+      console.log('Other engines search failed:', error);
+    }
+
+    // 最终状态 - 如果没有启用智能过滤或没有进行分析，显示基本搜索完成状态
+    if (!useSmartFilter.value || results.value.length === 0) {
+      searchStatus.value = `Search completed. Found ${results.value.length} results${modelInfo}`;
+    }
+    // 如果启用了智能过滤并且有结果，analyzeResults() 已经设置了包含分析信息的最终状态，不要覆盖它
+
   } catch (error) {
     console.error("Search failed:", error);
     searchStatus.value = `Search failed: ${error}`;
@@ -276,23 +324,32 @@ async function analyzeResults() {
     const analysisModel = llmConfig.analysis_config?.model || "Unknown";
     const batchSize = llmConfig.analysis_config?.batch_size || 5;
 
-    console.log(`🔧 [DEBUG] Frontend AI analysis: ${results.value.length} results, batch_size=${batchSize}, model=${analysisModel}`);
+    // 只分析尚未分析的结果
+    const unanalyzedResults = results.value.filter(result => !result.analysis);
+    const alreadyAnalyzedCount = results.value.length - unanalyzedResults.length;
 
-    let completedCount = 0;
+    if (unanalyzedResults.length === 0) {
+      console.log(`🔧 [DEBUG] All results already analyzed, skipping analysis`);
+      return;
+    }
+
+    console.log(`🔧 [DEBUG] Frontend AI analysis: ${unanalyzedResults.length} unanalyzed results (${results.value.length} total, ${alreadyAnalyzedCount} already analyzed), batch_size=${batchSize}, model=${analysisModel}`);
+
+    let completedCount = alreadyAnalyzedCount;
     let hasErrors = false;
     let errorMessages = [];
 
     // 使用并行批量分析，所有批次同时发出
     try {
-      const totalBatches = Math.ceil(results.value.length / batchSize);
+      const totalBatches = Math.ceil(unanalyzedResults.length / batchSize);
       console.log(`🔧 [DEBUG] Starting ${totalBatches} parallel batches with batch_size=${batchSize}`);
 
       // 创建所有批次的Promise
       const batchPromises = [];
       for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
         const startIdx = batchIndex * batchSize;
-        const endIdx = Math.min(startIdx + batchSize, results.value.length);
-        const batchResults = results.value.slice(startIdx, endIdx);
+        const endIdx = Math.min(startIdx + batchSize, unanalyzedResults.length);
+        const batchResults = unanalyzedResults.slice(startIdx, endIdx);
 
         const batchPromise = (async () => {
           try {
@@ -394,7 +451,9 @@ async function analyzeResults() {
                 }
 
                 completedCount++;
-                searchStatus.value = `Individual analysis fallback (${completedCount}/${results.value.length} completed, using ${analysisModel})...`;
+                const errorCount = errorMessages.length;
+                const statusSuffix = errorCount > 0 ? `, ${errorCount} errors` : '';
+                searchStatus.value = `Individual analysis fallback (${completedCount}/${results.value.length} completed${statusSuffix}, using ${analysisModel})...`;
 
               } catch (e) {
                 console.error(`Failed to analyze result: ${result.title}`, e);
@@ -425,7 +484,7 @@ async function analyzeResults() {
       }
 
       // 等待所有批次完成
-      searchStatus.value = `Analyzing with ${totalBatches} parallel batches (0/${results.value.length} completed, using ${analysisModel})...`;
+      searchStatus.value = `Analyzing with ${totalBatches} parallel batches (${alreadyAnalyzedCount}/${results.value.length} completed, using ${analysisModel})...`;
       const batchResults = await Promise.all(batchPromises);
 
       const successfulBatches = batchResults.filter((r: any) => r && r.success).length;
@@ -473,6 +532,8 @@ async function addToFavorites(result: any) {
 function toggleErrorExpanded(result: any) {
   result.errorExpanded = !result.errorExpanded;
 }
+
+
 
 function getErrorPreview(errorMessage: string): string {
   if (!errorMessage) return '';

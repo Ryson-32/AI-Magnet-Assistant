@@ -178,8 +178,7 @@ pub struct GenericProvider {
     url_template: String,
     client: reqwest::Client,
     llm_client: Option<Arc<dyn LlmClient>>,
-    extraction_config: Option<LlmConfig>,  // 第一次API调用配置
-    analysis_config: Option<LlmConfig>,    // 第二次API调用配置
+    extraction_config: Option<LlmConfig>,  // HTML提取配置（分析由前端处理）
     priority_keywords: Vec<String>,
 }
 
@@ -197,7 +196,6 @@ impl GenericProvider {
             client,
             llm_client: None,
             extraction_config: None,
-            analysis_config: None,
             priority_keywords: Vec::new(),
         }
     }
@@ -207,11 +205,10 @@ impl GenericProvider {
         mut self,
         llm_client: Arc<dyn LlmClient>,
         extraction_config: LlmConfig,
-        analysis_config: LlmConfig,
+        _analysis_config: LlmConfig, // 保持向后兼容，但不再使用
     ) -> Self {
         self.llm_client = Some(llm_client);
         self.extraction_config = Some(extraction_config);
-        self.analysis_config = Some(analysis_config);
         self
     }
 
@@ -282,28 +279,13 @@ impl GenericProvider {
                 println!("🎯 AI Phase 2: Separating priority results...");
                 let (priority_results, regular_results) = self.separate_priority_results(results);
 
-                println!("🔍 AI Phase 3: Detailed analysis for {} priority and {} regular results.",
+                println!("✅ AI extraction completed: {} priority and {} regular results.",
                          priority_results.len(), regular_results.len());
-
-                // 对优先结果进行详细分析
-                let enhanced_priority_results = if !priority_results.is_empty() {
-                    println!("🌟 Analyzing priority results...");
-                    self.apply_detailed_ai_analysis(priority_results, llm_client.clone()).await?
-                } else {
-                    Vec::new()
-                };
-
-                // 对普通结果也进行批量分析（如果有分析配置的话）
-                let enhanced_regular_results = if !regular_results.is_empty() && self.analysis_config.is_some() {
-                    println!("📊 Analyzing regular results...");
-                    self.apply_detailed_ai_analysis(regular_results, llm_client.clone()).await?
-                } else {
-                    regular_results
-                };
+                println!("📱 Results will be displayed immediately. Analysis will be handled by frontend.");
 
                 // 合并结果：优先结果在前，普通结果在后
-                let mut final_results = enhanced_priority_results;
-                final_results.extend(enhanced_regular_results);
+                let mut final_results = priority_results;
+                final_results.extend(regular_results);
                 Ok(final_results)
             }
             Err(e) => {
@@ -362,19 +344,56 @@ impl GenericProvider {
             // 第一阶段AI只提取基础信息，文件列表需要根据标题生成
             let file_list = generate_file_list_from_title(&basic_info.title);
 
+            // 处理source_url：如果是相对路径，需要转换为绝对路径
+            let source_url = basic_info.source_url.map(|url| {
+                if url.starts_with("http://") || url.starts_with("https://") {
+                    url
+                } else if url.starts_with("/") {
+                    // 相对路径，需要从URL模板中提取基础域名
+                    self.extract_base_url_from_template().map(|base| format!("{}{}", base, url)).unwrap_or(url)
+                } else {
+                    url
+                }
+            });
+
             results.push(SearchResult {
                 title: basic_info.title,
                 magnet_link: basic_info.magnet_link,
                 file_size: basic_info.file_size,
                 upload_date: None, // 第一阶段不提取上传日期
                 file_list,
-                source_url: None,
+                source_url,
                 score: None,
                 tags: None,
             });
         }
 
         Ok(results)
+    }
+
+    /// 从URL模板中提取基础URL（用于构建完整的source_url）
+    fn extract_base_url_from_template(&self) -> Option<String> {
+        if let Ok(parsed_url) = url::Url::parse(&self.url_template) {
+            if let Some(host) = parsed_url.host_str() {
+                let scheme = parsed_url.scheme();
+                return Some(format!("{}://{}", scheme, host));
+            }
+        }
+        None
+    }
+
+    /// 标准化source_url，将相对路径转换为绝对路径
+    fn normalize_source_url(&self, href: &str) -> String {
+        if href.starts_with("http://") || href.starts_with("https://") {
+            href.to_string()
+        } else if href.starts_with("/") {
+            // 相对路径，需要从URL模板中提取基础域名
+            self.extract_base_url_from_template()
+                .map(|base| format!("{}{}", base, href))
+                .unwrap_or_else(|| href.to_string())
+        } else {
+            href.to_string()
+        }
     }
 
     // 注意：parse_ai_html_response 函数已被删除，因为现在直接使用 BatchExtractBasicInfoResult
@@ -397,101 +416,8 @@ impl GenericProvider {
         (priority_results, regular_results)
     }
 
-    /// 第二阶段：对优先结果进行详细AI分析（支持批量处理）
-    async fn apply_detailed_ai_analysis(&self, mut results: Vec<SearchResult>, llm_client: Arc<dyn LlmClient>) -> Result<Vec<SearchResult>> {
-        if results.is_empty() {
-            return Ok(results);
-        }
-
-        // 获取分析配置
-        let analysis_config = self.analysis_config.as_ref()
-            .ok_or_else(|| anyhow!("Analysis config not available"))?;
-
-        println!("🧠 AI Phase 3: Detailed analysis for {} results...", results.len());
-
-        // 过滤出有文件列表的结果
-        let mut valid_items = Vec::new();
-        let mut valid_indices = Vec::new();
-
-        for (index, result) in results.iter().enumerate() {
-            if !result.file_list.is_empty() {
-                valid_items.push(crate::llm_service::BatchAnalysisItem {
-                    title: result.title.clone(),
-                    file_list: result.file_list.clone(),
-                });
-                valid_indices.push(index);
-            }
-        }
-
-        if valid_items.is_empty() {
-            println!("⚠️ No valid items with file lists for analysis.");
-            return Ok(results);
-        }
-
-        let batch_size = analysis_config.batch_size as usize;
-        println!("📦 Using batch size: {}.", batch_size);
-
-        // 分批处理
-        for (batch_index, chunk) in valid_items.chunks(batch_size).enumerate() {
-            let chunk_indices: Vec<usize> = valid_indices
-                .iter()
-                .skip(batch_index * batch_size)
-                .take(chunk.len())
-                .cloned()
-                .collect();
-
-            println!("🔄 Processing batch {}/{} ({} items)...",
-                     batch_index + 1,
-                     (valid_items.len() + batch_size - 1) / batch_size,
-                     chunk.len());
-
-            match llm_client.batch_analyze_multiple_items(chunk, analysis_config).await {
-                Ok(batch_results) => {
-                    println!("✅ Batch {} analysis successful.", batch_index + 1);
-                    // 将批量结果应用到原始结果中
-                    for (i, analysis_result) in batch_results.iter().enumerate() {
-                        if let Some(&original_index) = chunk_indices.get(i) {
-                            let result = &mut results[original_index];
-                            if !analysis_result.cleaned_title.is_empty() {
-                                result.title = analysis_result.cleaned_title.clone();
-                            }
-                            result.score = Some(analysis_result.purity_score);
-                            result.tags = Some(analysis_result.tags.clone());
-                        }
-                    }
-                }
-                Err(e) => {
-                    println!("⚠️ Batch {} failed: {}. Falling back to individual analysis.", batch_index + 1, e);
-                    // 批量失败时，回退到单个分析
-                    for (i, item) in chunk.iter().enumerate() {
-                        if let Some(&original_index) = chunk_indices.get(i) {
-                            match llm_client.batch_analyze_scores_and_tags(&item.title, &item.file_list, analysis_config).await {
-                                Ok((cleaned_title, score, tags)) => {
-                                    let result = &mut results[original_index];
-                                    if !cleaned_title.is_empty() {
-                                        result.title = cleaned_title;
-                                    }
-                                    result.score = Some(score);
-                                    result.tags = Some(tags);
-                                    println!("✅ Individual analysis success for: {}", result.title);
-                                }
-                                Err(individual_error) => {
-                                    println!("⚠️ Individual analysis failed for '{}': {}", item.title, individual_error);
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
-
-        Ok(results)
-    }
-
-
-
-    // 注意：generate_ai_enhanced_file_list 和 clean_title_for_filename 方法已被删除
-    // 因为它们未被使用，文件列表生成现在使用 generate_file_list_from_title 函数
+    // 注意：apply_detailed_ai_analysis 方法已被移除
+    // 现在统一使用前端的并行分析流程，提供更好的用户体验
 
     fn parse_generic_results(&self, html: &str) -> Result<Vec<SearchResult>> {
         let document = Html::parse_document(html);
@@ -543,6 +469,7 @@ impl GenericProvider {
         let mut title = None;
         let mut file_size = None;
         let mut upload_date = None;
+        let mut source_url = None;
 
         // 分析每个单元格
         for (i, cell) in cells.iter().enumerate() {
@@ -555,6 +482,10 @@ impl GenericProvider {
                         let link_text = link.text().collect::<String>().trim().to_string();
                         if !link_text.is_empty() && !link_text.starts_with("magnet:") {
                             title = Some(link_text);
+                            // 提取source_url
+                            if let Some(href) = link.value().attr("href") {
+                                source_url = Some(self.normalize_source_url(href));
+                            }
                         }
                     }
                 }
@@ -586,7 +517,7 @@ impl GenericProvider {
             file_size,
             upload_date,
             file_list,
-            source_url: None,
+            source_url,
             score: None,
             tags: None,
         })
@@ -779,42 +710,95 @@ pub struct SearchCore {
 impl SearchCore {
     // 注意：基础构造函数已被删除，统一使用 create_ai_enhanced_search_core
 
-    /// 多线程并发搜索
+    /// 多页搜索 - 按提供商顺序搜索，优先返回clmclm结果
     pub async fn search_multi_page(&self, query: &str, max_pages: u32) -> Result<Vec<SearchResult>> {
         if self.providers.is_empty() {
             return Err(anyhow!("No search providers available"));
         }
 
-        // 使用第一个提供商进行多页搜索
-        let provider = &self.providers[0];
-
-        let search_futures: Vec<_> = (1..=max_pages)
-            .map(|page| {
-                let provider = Arc::clone(provider);
-                let query = query.to_string();
-                async move {
-                    provider.search(&query, page).await
-                }
-            })
-            .collect();
-
-        let results = join_all(search_futures).await;
+        println!("🔍 Starting search with {} providers, {} pages each", self.providers.len(), max_pages);
 
         let mut all_results = Vec::new();
-        for (page, result) in results.into_iter().enumerate() {
-            match result {
-                Ok(mut page_results) => {
-                    all_results.append(&mut page_results);
-                }
-                Err(e) => {
-                    eprintln!("Failed to search page {}: {}", page + 1, e);
-                    // 继续处理其他页面，不因为单页失败而中断
+
+        // 分离clmclm和其他提供商
+        let mut clmclm_provider = None;
+        let mut other_providers = Vec::new();
+
+        for provider in &self.providers {
+            if provider.name() == "clmclm.com" {
+                clmclm_provider = Some(Arc::clone(provider));
+            } else {
+                other_providers.push(Arc::clone(provider));
+            }
+        }
+
+        // 1. 首先搜索clmclm（如果启用）
+        if let Some(clmclm) = clmclm_provider {
+            println!("🔍 Searching clmclm.com first for faster results");
+            for page in 1..=max_pages {
+                match clmclm.search(query, page).await {
+                    Ok(mut results) => {
+                        println!("✅ clmclm.com page {} returned {} results", page, results.len());
+                        all_results.append(&mut results);
+                    }
+                    Err(e) => {
+                        println!("❌ clmclm.com page {} failed: {}", page, e);
+                    }
                 }
             }
         }
 
+        // 2. 然后并发搜索其他提供商
+        if !other_providers.is_empty() {
+            println!("🔍 Now searching {} other providers concurrently", other_providers.len());
+
+            let mut other_search_futures = Vec::new();
+
+            for provider in other_providers {
+                for page in 1..=max_pages {
+                    let provider = Arc::clone(&provider);
+                    let query = query.to_string();
+                    let provider_name = provider.name().to_string();
+
+                    let search_future = async move {
+                        println!("🔍 Searching {} page {} with provider: {}", query, page, provider_name);
+                        match provider.search(&query, page).await {
+                            Ok(results) => {
+                                println!("✅ Provider {} page {} returned {} results", provider_name, page, results.len());
+                                Ok(results)
+                            }
+                            Err(e) => {
+                                println!("❌ Provider {} page {} failed: {}", provider_name, page, e);
+                                Err(e)
+                            }
+                        }
+                    };
+
+                    other_search_futures.push(search_future);
+                }
+            }
+
+            // 并发执行其他搜索任务
+            let results = join_all(other_search_futures).await;
+
+            for result in results {
+                match result {
+                    Ok(mut page_results) => {
+                        all_results.append(&mut page_results);
+                    }
+                    Err(e) => {
+                        println!("⚠️ Search task failed: {}", e);
+                        // 继续处理其他结果，不因为单个任务失败而中断
+                    }
+                }
+            }
+        }
+
+        println!("🎯 Total results collected from all providers: {}", all_results.len());
         Ok(all_results)
     }
+
+
 
     /// 单页搜索（向后兼容）
     #[allow(dead_code)]
@@ -826,7 +810,7 @@ impl SearchCore {
 /// 创建带有AI功能的搜索核心
 pub fn create_ai_enhanced_search_core(
     extraction_config: Option<LlmConfig>,
-    analysis_config: Option<LlmConfig>,
+    analysis_config: Option<LlmConfig>, // 保持向后兼容，但现在只用于HTML提取
     priority_keywords: Vec<String>,
     custom_engines: Vec<(String, String)>, // (name, url_template) pairs
     include_clmclm: bool // 是否包含 clmclm.com
@@ -840,13 +824,16 @@ pub fn create_ai_enhanced_search_core(
     }
 
     // 为自定义搜索引擎创建AI增强的提供商
-    if let (Some(extract_config), Some(analyze_config)) = (extraction_config, analysis_config) {
+    // 优先使用 extraction_config，如果没有则使用 analysis_config（向后兼容）
+    let html_extraction_config = extraction_config.or(analysis_config);
+
+    if let Some(extract_config) = html_extraction_config {
         let llm_client: Arc<dyn LlmClient> = Arc::new(GeminiClient::new());
 
         for (name, url_template) in custom_engines {
             println!("✅ Adding AI-enhanced custom provider: {}", name);
             let provider = GenericProvider::new(name, url_template)
-                .with_llm_client_and_configs(llm_client.clone(), extract_config.clone(), analyze_config.clone())
+                .with_llm_client_and_configs(llm_client.clone(), extract_config.clone(), extract_config.clone())
                 .with_priority_keywords(priority_keywords.clone());
             providers.push(Arc::new(provider));
         }

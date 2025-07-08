@@ -112,8 +112,11 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, inject } from 'vue';
 import { invoke } from "@tauri-apps/api/core";
+
+// 注入全局通知函数
+const showNotification = inject('showNotification') as (message: string, type?: 'success' | 'error', duration?: number) => void;
 
 interface SearchEngine {
   id: string;
@@ -146,7 +149,7 @@ async function loadEngines() {
     engines.value = result as SearchEngine[];
   } catch (error) {
     console.error("Failed to load engines:", error);
-    alert(`Failed to load engines: ${error}`);
+    showNotification(`Failed to load engines: ${error}`, 'error');
   } finally {
     loading.value = false;
   }
@@ -162,7 +165,7 @@ async function toggleEngine(id: string, isEnabled: boolean) {
     }
   } catch (error) {
     console.error("Failed to update engine status:", error);
-    alert(`Failed to update engine status: ${error}`);
+    showNotification(`Failed to update engine status: ${error}`, 'error');
     // Reload to restore correct state
     await loadEngines();
   }
@@ -178,7 +181,7 @@ async function deleteEngine(id: string) {
       pendingDeleteId.value = null;
     } catch (error) {
       console.error("Failed to delete engine:", error);
-      alert(`Failed to delete engine: ${error}`);
+      showNotification(`Failed to delete engine: ${error}`, 'error');
     }
   } else {
     pendingDeleteId.value = id;
@@ -190,7 +193,7 @@ async function deleteEngine(id: string) {
 
 async function addEngine() {
   if (!newEngine.value.name || !newEngine.value.urlExample1 || !newEngine.value.urlExample2) {
-    alert("Please fill in all fields");
+    showNotification("Please fill in all fields", 'error');
     return;
   }
 
@@ -212,10 +215,10 @@ async function addEngine() {
     };
     
     await loadEngines(); // Reload the list
-    alert("Search engine added successfully!");
+    showNotification("Search engine added successfully!");
   } catch (error) {
     console.error("Failed to add engine:", error);
-    alert(`Failed to add engine: ${error}`);
+    showNotification(`Failed to add engine: ${error}`, 'error');
   } finally {
     isAdding.value = false;
   }
