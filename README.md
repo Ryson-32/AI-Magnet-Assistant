@@ -15,7 +15,7 @@
 -   **Intuitive User Interface**: A clean, modern, and user-friendly interface built with Vue.js.
 -   **Cross-Platform Support**: Built with Tauri, allowing the application to run on Windows, macOS, and Linux from a single codebase.
 -   **Extensible Search Engine**: Includes the built-in `clmclm.com` search engine and supports adding custom sites (Note: Some sites may have anti-scraping measures, and custom sites are analyzed by AI processing the entire HTML, which can be slow).
--   **Gemini API Integration**: Currently, only Gemini API integration is supported. It is recommended to use models that support high concurrency (e.g., `gemini-2.5-flash`) for optimal performance.
+-   **Gemini API Integration**: Currently, only Gemini API integration is supported. It is recommended to use models that support high concurrency (e.g., `gemini-2.5-flash-lite-preview-06-17`) for optimal performance.
 
 ## Getting Started
 
