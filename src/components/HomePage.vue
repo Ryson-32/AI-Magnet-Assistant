@@ -72,7 +72,14 @@
             @add-to-favorites="addToFavorites"
           />
           <div v-if="result.analysis && result.analysis.error" class="error-details">
-            <p><strong>Error:</strong> {{ result.analysis.error }}</p>
+            <div class="error-header" @click="toggleErrorExpanded(result)">
+              <strong>Error:</strong>
+              <span class="error-preview">{{ getErrorPreview(result.analysis.error) }}</span>
+              <span class="error-toggle">{{ result.errorExpanded ? '▼' : '▶' }}</span>
+            </div>
+            <div v-if="result.errorExpanded" class="error-full">
+              {{ result.analysis.error }}
+            </div>
           </div>
         </div>
       </div>
@@ -267,63 +274,180 @@ async function analyzeResults() {
 
     const startTime = Date.now();
     const analysisModel = llmConfig.analysis_config?.model || "Unknown";
-    searchStatus.value = `Analyzing ${results.value.length} results with AI (using ${analysisModel})...`;
+    const batchSize = llmConfig.analysis_config?.batch_size || 5;
 
-    // 并发分析所有结果
+    console.log(`🔧 [DEBUG] Frontend AI analysis: ${results.value.length} results, batch_size=${batchSize}, model=${analysisModel}`);
+
     let completedCount = 0;
-    const analysisPromises = results.value.map(async (result: any) => {
-      try {
-        // 转换为llm_service::LlmConfig格式
-        const analysisConfig = {
-          provider: llmConfig.analysis_config.provider,
-          api_key: llmConfig.analysis_config.api_key,
-          api_base: llmConfig.analysis_config.api_base,
-          model: llmConfig.analysis_config.model,
-        };
+    let hasErrors = false;
+    let errorMessages = [];
 
-        const rawAnalysis = await invoke('analyze_resource', {
-          result: result,
-          llmConfig: analysisConfig,
-        });
-        let analysis;
+    // 使用并行批量分析，所有批次同时发出
+    try {
+      const totalBatches = Math.ceil(results.value.length / batchSize);
+      console.log(`🔧 [DEBUG] Starting ${totalBatches} parallel batches with batch_size=${batchSize}`);
 
-        try {
-          if (typeof rawAnalysis === 'string') {
-            analysis = JSON.parse(rawAnalysis);
-          } else {
-            analysis = rawAnalysis;
+      // 创建所有批次的Promise
+      const batchPromises = [];
+      for (let batchIndex = 0; batchIndex < totalBatches; batchIndex++) {
+        const startIdx = batchIndex * batchSize;
+        const endIdx = Math.min(startIdx + batchSize, results.value.length);
+        const batchResults = results.value.slice(startIdx, endIdx);
+
+        const batchPromise = (async () => {
+          try {
+            console.log(`🚀 [DEBUG] Starting batch ${batchIndex + 1}/${totalBatches} with ${batchResults.length} items`);
+
+            const analysisResults = await invoke('batch_analyze_resources', {
+              results: batchResults
+            });
+
+            // 将分析结果应用到原始结果中
+            if (Array.isArray(analysisResults)) {
+              for (let i = 0; i < batchResults.length; i++) {
+                const result = batchResults[i];
+                const analysis = analysisResults[i];
+
+                if (analysis && !analysis.error) {
+                  // 成功的分析结果
+                  result.analysis = {
+                    title: analysis.title,
+                    purity_score: analysis.purity_score,
+                    tags: analysis.tags,
+                  };
+
+                  // 保存原始标题用于tooltip显示
+                  if (!result.originalTitle) {
+                    result.originalTitle = result.title;
+                  }
+                  // 使用精简标题作为显示标题
+                  result.title = analysis.title;
+                } else {
+                  // 失败的分析结果或缺失的结果
+                  const errorMsg = analysis?.error || 'No analysis result returned';
+                  result.analysis = {
+                    error: errorMsg,
+                    title: result.title, // 保持原标题
+                    purity_score: 0,
+                    tags: ['Analysis Failed']
+                  };
+                  hasErrors = true;
+                  errorMessages.push(`Batch ${batchIndex + 1} item ${i + 1} failed: ${errorMsg}`);
+                  console.log(`🔧 [DEBUG] Set error for result "${result.title}": ${errorMsg}`);
+                }
+
+                completedCount++;
+
+                // 实时更新状态
+                const errorCount = errorMessages.length;
+                const statusSuffix = errorCount > 0 ? `, ${errorCount} errors` : '';
+                searchStatus.value = `Analyzing with ${totalBatches} parallel batches (${completedCount}/${results.value.length} completed${statusSuffix}, using ${analysisModel})...`;
+              }
+
+              console.log(`✅ [DEBUG] Batch ${batchIndex + 1}/${totalBatches} completed: ${analysisResults.length} results processed`);
+              return { success: true, batchIndex: batchIndex + 1, count: analysisResults.length };
+            } else {
+              // 批量分析返回了非数组结果，视为失败
+              throw new Error('Batch analysis returned invalid result format');
+            }
+          } catch (batchError) {
+            console.error(`Batch ${batchIndex + 1} failed, falling back to individual analysis:`, batchError);
+            hasErrors = true;
+            errorMessages.push(`Batch ${batchIndex + 1} failed: ${batchError}`);
+
+            // 对这个批次回退到单个分析（并行）
+            const individualPromises = batchResults.map(async (result: any) => {
+              try {
+                const analysisConfig = {
+                  provider: llmConfig.analysis_config.provider,
+                  api_key: llmConfig.analysis_config.api_key,
+                  api_base: llmConfig.analysis_config.api_base,
+                  model: llmConfig.analysis_config.model,
+                  batch_size: llmConfig.analysis_config.batch_size,
+                };
+
+                const rawAnalysis = await invoke('analyze_resource', {
+                  result: result,
+                  llmConfig: analysisConfig,
+                });
+
+                let analysis;
+                try {
+                  if (typeof rawAnalysis === 'string') {
+                    analysis = JSON.parse(rawAnalysis);
+                  } else {
+                    analysis = rawAnalysis;
+                  }
+                } catch (e) {
+                  console.error('Failed to parse analysis from backend:', e);
+                  analysis = { error: `Failed to parse analysis: ${e}` };
+                }
+
+                result.analysis = analysis;
+                if (analysis && analysis.title && !analysis.error) {
+                  if (!result.originalTitle) {
+                    result.originalTitle = result.title;
+                  }
+                  result.title = analysis.title;
+                } else if (analysis && analysis.error) {
+                  console.log(`🔧 [DEBUG] Set parse error for result "${result.title}": ${analysis.error}`);
+                }
+
+                completedCount++;
+                searchStatus.value = `Individual analysis fallback (${completedCount}/${results.value.length} completed, using ${analysisModel})...`;
+
+              } catch (e) {
+                console.error(`Failed to analyze result: ${result.title}`, e);
+                const errorMsg = `Analysis Failed: ${e}`;
+                result.analysis = {
+                  error: errorMsg,
+                  title: result.title, // 保持原标题
+                  purity_score: 0,
+                  tags: ['Analysis Failed']
+                };
+                hasErrors = true;
+                errorMessages.push(`Individual analysis failed for "${result.title}": ${e}`);
+                completedCount++;
+
+                console.log(`🔧 [DEBUG] Set individual error for result "${result.title}": ${errorMsg}`);
+
+                // 实时更新状态显示错误
+                searchStatus.value = `Individual analysis fallback (${completedCount}/${results.value.length} completed, ${errorMessages.length} errors, using ${analysisModel})...`;
+              }
+            });
+
+            await Promise.all(individualPromises);
+            return { success: false, batchIndex: batchIndex + 1, error: batchError };
           }
-        } catch (e) {
-          console.error('Failed to parse analysis from backend:', e);
-          analysis = { error: `Failed to parse analysis: ${e}` };
-        }
+        })();
 
-        result.analysis = analysis;
-        if (analysis && analysis.title) {
-          // 保存原始标题用于tooltip显示
-          if (!result.originalTitle) {
-            result.originalTitle = result.title;
-          }
-          // 使用精简标题作为显示标题
-          result.title = analysis.title;
-        }
-      } catch (e) {
-        console.error(`Failed to analyze result: ${result.title}`, e);
-        result.analysis = { error: `Analysis Failed: ${e}` };
-      } finally {
-        completedCount++;
-        searchStatus.value = `Analyzing ${results.value.length} results with AI (${completedCount}/${results.value.length} completed, using ${analysisModel})...`;
+        batchPromises.push(batchPromise);
       }
-    });
 
-    // 等待所有分析任务完成
-    await Promise.all(analysisPromises);
+      // 等待所有批次完成
+      searchStatus.value = `Analyzing with ${totalBatches} parallel batches (0/${results.value.length} completed, using ${analysisModel})...`;
+      const batchResults = await Promise.all(batchPromises);
 
+      const successfulBatches = batchResults.filter((r: any) => r && r.success).length;
+      const failedBatches = batchResults.filter((r: any) => r && !r.success).length;
+
+      console.log(`✅ [DEBUG] All ${totalBatches} parallel batches completed: ${successfulBatches} successful, ${failedBatches} failed, ${completedCount} results processed`);
+    } catch (e) {
+      console.error('Complete parallel analysis failed:', e);
+      hasErrors = true;
+      errorMessages.push(`Complete analysis failed: ${e}`);
+      searchStatus.value = `Analysis failed: ${e}`;
+    }
+
+    // 显示最终状态
     const endTime = Date.now();
     const duration = ((endTime - startTime) / 1000).toFixed(1);
 
-    // 结果已直接更新，只需更新状态
-    searchStatus.value = `AI analysis completed in ${duration}s (${results.value.length} results processed using ${analysisModel})`;
+    if (hasErrors && errorMessages.length > 0) {
+      searchStatus.value = `AI analysis completed in ${duration}s (${completedCount} results processed, ${errorMessages.length} errors using ${analysisModel})`;
+    } else {
+      searchStatus.value = `AI analysis completed in ${duration}s (${completedCount} results processed using ${analysisModel})`;
+    }
   } catch (error) {
     console.error('AI analysis failed:', error);
     searchStatus.value = `AI analysis failed: ${error}`;
@@ -345,6 +469,30 @@ async function addToFavorites(result: any) {
     showNotification(`Failed to add to favorites: ${error}`, "error");
   }
 }
+
+function toggleErrorExpanded(result: any) {
+  result.errorExpanded = !result.errorExpanded;
+}
+
+function getErrorPreview(errorMessage: string): string {
+  if (!errorMessage) return '';
+
+  // 提取关键错误信息
+  if (errorMessage.includes('rate limit') || errorMessage.includes('quota')) {
+    return 'API rate limit exceeded';
+  } else if (errorMessage.includes('timeout')) {
+    return 'Request timeout';
+  } else if (errorMessage.includes('network') || errorMessage.includes('connection')) {
+    return 'Network error';
+  } else if (errorMessage.includes('parse') || errorMessage.includes('JSON')) {
+    return 'Response parsing error';
+  } else {
+    // 截取前50个字符作为预览
+    return errorMessage.length > 50 ? errorMessage.substring(0, 50) + '...' : errorMessage;
+  }
+}
+
+
 </script>
 
 <style scoped>
@@ -565,5 +713,42 @@ async function addToFavorites(result: any) {
   border-radius: 6px;
   color: #c53030;
   font-size: 14px;
+}
+
+.error-header {
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  user-select: none;
+}
+
+.error-header:hover {
+  background: rgba(197, 48, 48, 0.1);
+  border-radius: 4px;
+  padding: 4px;
+  margin: -4px;
+}
+
+.error-preview {
+  flex: 1;
+  font-weight: normal;
+}
+
+.error-toggle {
+  font-size: 12px;
+  color: #a53030;
+  transition: transform 0.2s ease;
+}
+
+.error-full {
+  margin-top: 8px;
+  padding: 8px;
+  background: rgba(197, 48, 48, 0.1);
+  border-radius: 4px;
+  font-size: 12px;
+  line-height: 1.4;
+  word-break: break-word;
+  white-space: pre-wrap;
 }
 </style>

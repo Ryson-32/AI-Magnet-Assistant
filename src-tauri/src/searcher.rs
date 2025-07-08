@@ -67,9 +67,9 @@ impl SearchProvider for ClmclmProvider {
         }
 
         let html = response.text().await?;
-        println!("✅ Got response, parsing results...");
+        println!("✅ Response received, parsing...");
         let results = self.parse_results(&html)?;
-        println!("📊 Found {} results on page {}", results.len(), page);
+        println!("📊 Found {} results on page {}.", results.len(), page);
         Ok(results)
     }
 }
@@ -249,20 +249,19 @@ impl SearchProvider for GenericProvider {
         let html = response.text().await
             .map_err(|e| anyhow!("Failed to read response: {}", e))?;
 
-        println!("✅ Got response, parsing results...");
+        println!("✅ Response received, parsing...");
 
         // 对于自定义搜索引擎，使用AI智能识别流程
         let results = if let Some(llm_client) = &self.llm_client {
-            println!("🤖 Using AI to analyze raw HTML content...");
+            println!("🤖 Analyzing HTML with AI...");
             self.analyze_html_with_ai(&html, llm_client.clone()).await?
         } else {
-            println!("📊 Using basic parsing (no AI available)...");
+            println!("📊 Basic parsing (no AI)...");
             self.parse_generic_results(&html)?
         };
 
-        println!("📊 Found {} results on page {}", results.len(), page);
-
-        println!("✨ Final results: {} items after AI processing", results.len());
+        println!("📊 Found {} results on page {}.", results.len(), page);
+        println!("✨ Final results after AI processing: {} items.", results.len());
         Ok(results)
     }
 }
@@ -270,29 +269,41 @@ impl SearchProvider for GenericProvider {
 impl GenericProvider {
     /// 使用AI分析整个HTML内容
     async fn analyze_html_with_ai(&self, html: &str, llm_client: Arc<dyn LlmClient>) -> Result<Vec<SearchResult>> {
-        println!("🧠 Phase 1: Sending raw HTML to AI for analysis...");
+        println!("🧠 AI Phase 1: Extracting basic info from HTML...");
 
         // 第一阶段：让AI从HTML中提取所有磁力链接和基础信息
         match self.extract_torrents_from_html_with_ai(html, llm_client.clone()).await {
             Ok(results) => {
                 if results.is_empty() {
-                    println!("⚠️ AI extraction returned no results, falling back to basic parsing");
+                    println!("⚠️ AI extraction found no results. Falling back to basic parsing.");
                     return self.parse_generic_results(html);
                 }
 
-                println!("🎯 Phase 2: Applying Priority Keywords matching...");
+                println!("🎯 AI Phase 2: Separating priority results...");
                 let (priority_results, regular_results) = self.separate_priority_results(results);
 
-                println!("🔍 Phase 3: Detailed AI analysis for {} priority results...", priority_results.len());
+                println!("🔍 AI Phase 3: Detailed analysis for {} priority and {} regular results.",
+                         priority_results.len(), regular_results.len());
+
+                // 对优先结果进行详细分析
                 let enhanced_priority_results = if !priority_results.is_empty() {
+                    println!("🌟 Analyzing priority results...");
                     self.apply_detailed_ai_analysis(priority_results, llm_client.clone()).await?
                 } else {
                     Vec::new()
                 };
 
+                // 对普通结果也进行批量分析（如果有分析配置的话）
+                let enhanced_regular_results = if !regular_results.is_empty() && self.analysis_config.is_some() {
+                    println!("📊 Analyzing regular results...");
+                    self.apply_detailed_ai_analysis(regular_results, llm_client.clone()).await?
+                } else {
+                    regular_results
+                };
+
                 // 合并结果：优先结果在前，普通结果在后
                 let mut final_results = enhanced_priority_results;
-                final_results.extend(regular_results);
+                final_results.extend(enhanced_regular_results);
                 Ok(final_results)
             }
             Err(e) => {
@@ -306,7 +317,7 @@ impl GenericProvider {
     async fn extract_torrents_from_html_with_ai(&self, html: &str, llm_client: Arc<dyn LlmClient>) -> Result<Vec<SearchResult>> {
         // 限制HTML长度以避免超出AI token限制
         let truncated_html = if html.len() > 50000 {
-            println!("📏 HTML too long ({}), truncating to 50000 chars", html.len());
+            println!("📏 HTML too long ({}), truncating.", html.len());
             &html[..50000]
         } else {
             html
@@ -374,30 +385,19 @@ impl GenericProvider {
             return (Vec::new(), results);
         }
 
-        let mut priority_results = Vec::new();
-        let mut regular_results = Vec::new();
-
-        for result in results {
+        let (priority_results, regular_results): (Vec<_>, Vec<_>) = results.into_iter().partition(|result| {
             let title_lower = result.title.to_lowercase();
-            let has_priority = self.priority_keywords.iter().any(|keyword| {
-                title_lower.contains(&keyword.to_lowercase())
-            });
+            self.priority_keywords.iter().any(|keyword| title_lower.contains(&keyword.to_lowercase()))
+        });
 
-            if has_priority {
-                println!("🌟 Priority match found: {}", result.title);
-                priority_results.push(result);
-            } else {
-                regular_results.push(result);
-            }
+        if !priority_results.is_empty() {
+            println!("🌟 Found {} priority results.", priority_results.len());
         }
-
-        println!("🎯 Separated {} priority results and {} regular results",
-                priority_results.len(), regular_results.len());
 
         (priority_results, regular_results)
     }
 
-    /// 第二阶段：对优先结果进行详细AI分析
+    /// 第二阶段：对优先结果进行详细AI分析（支持批量处理）
     async fn apply_detailed_ai_analysis(&self, mut results: Vec<SearchResult>, llm_client: Arc<dyn LlmClient>) -> Result<Vec<SearchResult>> {
         if results.is_empty() {
             return Ok(results);
@@ -407,42 +407,84 @@ impl GenericProvider {
         let analysis_config = self.analysis_config.as_ref()
             .ok_or_else(|| anyhow!("Analysis config not available"))?;
 
-        println!("🧠 Phase 3: Detailed analysis for {} priority results...", results.len());
+        println!("🧠 AI Phase 3: Detailed analysis for {} results...", results.len());
 
-        // 迭代处理每个结果，因为新的API一次只处理一个文件列表
-        for result in results.iter_mut() {
-            // 如果文件列表为空，则无法分析
-            if result.file_list.is_empty() {
-                continue;
+        // 过滤出有文件列表的结果
+        let mut valid_items = Vec::new();
+        let mut valid_indices = Vec::new();
+
+        for (index, result) in results.iter().enumerate() {
+            if !result.file_list.is_empty() {
+                valid_items.push(crate::llm_service::BatchAnalysisItem {
+                    title: result.title.clone(),
+                    file_list: result.file_list.clone(),
+                });
+                valid_indices.push(index);
             }
+        }
 
-            match llm_client.batch_analyze_scores_and_tags(&result.title, &result.file_list, analysis_config).await {
-                Ok(detailed_info) => {
-                    // detailed_info is a tuple: (title, score, tags)
-                    let (cleaned_title, score, tags) = detailed_info;
-                    
-                    // 使用AI清理后的标题更新结果
-                    if !cleaned_title.is_empty() {
-                        result.title = cleaned_title;
+        if valid_items.is_empty() {
+            println!("⚠️ No valid items with file lists for analysis.");
+            return Ok(results);
+        }
+
+        let batch_size = analysis_config.batch_size as usize;
+        println!("📦 Using batch size: {}.", batch_size);
+
+        // 分批处理
+        for (batch_index, chunk) in valid_items.chunks(batch_size).enumerate() {
+            let chunk_indices: Vec<usize> = valid_indices
+                .iter()
+                .skip(batch_index * batch_size)
+                .take(chunk.len())
+                .cloned()
+                .collect();
+
+            println!("🔄 Processing batch {}/{} ({} items)...",
+                     batch_index + 1,
+                     (valid_items.len() + batch_size - 1) / batch_size,
+                     chunk.len());
+
+            match llm_client.batch_analyze_multiple_items(chunk, analysis_config).await {
+                Ok(batch_results) => {
+                    println!("✅ Batch {} analysis successful.", batch_index + 1);
+                    // 将批量结果应用到原始结果中
+                    for (i, analysis_result) in batch_results.iter().enumerate() {
+                        if let Some(&original_index) = chunk_indices.get(i) {
+                            let result = &mut results[original_index];
+                            if !analysis_result.cleaned_title.is_empty() {
+                                result.title = analysis_result.cleaned_title.clone();
+                            }
+                            result.score = Some(analysis_result.purity_score);
+                            result.tags = Some(analysis_result.tags.clone());
+                        }
                     }
-                    
-                    result.score = Some(score);
-                    result.tags = Some(tags.clone());
-
-                    // 直接使用AI清理后的标题，不再调用本地规则重新生成文件列表
-                    // 如果需要，可以根据标签等信息对现有file_list进行微调，但此处保持不变
-                    // result.file_list = self.generate_ai_enhanced_file_list(...);
-
-                    println!("✅ Detailed analysis: {} (score: {}, tags: {:?})",
-                             result.title, score, &tags);
                 }
                 Err(e) => {
-                    println!("⚠️ Detailed analysis for '{}' failed: {}", result.title, e);
+                    println!("⚠️ Batch {} failed: {}. Falling back to individual analysis.", batch_index + 1, e);
+                    // 批量失败时，回退到单个分析
+                    for (i, item) in chunk.iter().enumerate() {
+                        if let Some(&original_index) = chunk_indices.get(i) {
+                            match llm_client.batch_analyze_scores_and_tags(&item.title, &item.file_list, analysis_config).await {
+                                Ok((cleaned_title, score, tags)) => {
+                                    let result = &mut results[original_index];
+                                    if !cleaned_title.is_empty() {
+                                        result.title = cleaned_title;
+                                    }
+                                    result.score = Some(score);
+                                    result.tags = Some(tags);
+                                    println!("✅ Individual analysis success for: {}", result.title);
+                                }
+                                Err(individual_error) => {
+                                    println!("⚠️ Individual analysis failed for '{}': {}", item.title, individual_error);
+                                }
+                            }
+                        }
+                    }
                 }
             }
         }
 
-        // 由于循环内部已经处理了错误，这里我们假设外部函数总是成功的
         Ok(results)
     }
 
