@@ -36,6 +36,12 @@ pub struct LlmConfig {
     pub api_key: String,
     pub api_base: String,
     pub model: String,
+    #[serde(default = "default_batch_size")]
+    pub batch_size: u32,
+}
+
+fn default_batch_size() -> u32 {
+    5
 }
 
 // --- 1. 第一阶段：从HTML中提取基础信息 ---
@@ -65,6 +71,8 @@ pub struct DetailedAnalysisResult {
     pub magnet_link: String,     // 原始磁力链接 (从第一阶段透传)
     pub file_size: Option<String>, // 原始文件大小 (从第一阶段透传)
     pub file_list: Vec<String>, // 文件列表
+    #[serde(skip_serializing_if = "Option::is_none")]
+    pub error: Option<String>,   // 错误信息 (如果分析失败)
 }
 
 /// LLM为第二阶段分析返回的原始数据结构
@@ -76,7 +84,20 @@ struct LlmFileAnalysis {
     pub purity_score: u8,          // LLM计算的纯净度分数 (仅对主媒体文件有意义)
 }
 
-// 注意：BatchLlmFileAnalysis 结构体已被删除，因为未被使用
+/// 批量分析的输入项
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BatchAnalysisItem {
+    pub title: String,
+    pub file_list: Vec<String>,
+}
+
+/// 批量分析的结果项
+#[derive(Serialize, Deserialize, Debug, Clone)]
+pub struct BatchAnalysisResult {
+    pub cleaned_title: String,
+    pub purity_score: u8,
+    pub tags: Vec<String>,
+}
 
 // --- 3. LLM客户端定义 ---
 
@@ -89,13 +110,20 @@ pub trait LlmClient: Send + Sync {
         extraction_config: &LlmConfig,
     ) -> Result<BatchExtractBasicInfoResult>;
 
-    /// 第二阶段：根据文件列表批量分析分数和标签
+    /// 第二阶段：根据文件列表批量分析分数和标签（单个项目）
     async fn batch_analyze_scores_and_tags(
         &self,
         original_title: &str,
         file_list: &[String],
         analysis_config: &LlmConfig,
     ) -> Result<(String, u8, Vec<String>)>;
+
+    /// 第二阶段：真正的批量分析多个项目
+    async fn batch_analyze_multiple_items(
+        &self,
+        items: &[BatchAnalysisItem],
+        analysis_config: &LlmConfig,
+    ) -> Result<Vec<BatchAnalysisResult>>;
 }
 
 pub struct GeminiClient {
@@ -127,6 +155,14 @@ impl LlmClient for GeminiClient {
     ) -> Result<(String, u8, Vec<String>)> {
         self.batch_analyze_scores_and_tags_impl(original_title, file_list, analysis_config)
             .await
+    }
+
+    async fn batch_analyze_multiple_items(
+        &self,
+        items: &[BatchAnalysisItem],
+        analysis_config: &LlmConfig,
+    ) -> Result<Vec<BatchAnalysisResult>> {
+        self.batch_analyze_multiple_items_impl(items, analysis_config).await
     }
 }
 
@@ -257,8 +293,48 @@ impl GeminiClient {
         Err(anyhow::anyhow!("Gemini响应中未找到有效内容"))
     }
 
-    /// **重构后的第二阶段实现**: 根据新的、更简单的逻辑分析标题、文件列表和标签。
+    /// **重构后的第二阶段实现**: 根据新的、更简单的逻辑分析标题、文件列表和标签（支持重试）。
     async fn batch_analyze_scores_and_tags_impl(
+        &self,
+        original_title: &str,
+        file_list: &[String],
+        config: &LlmConfig,
+    ) -> Result<(String, u8, Vec<String>)> {
+        let mut retry_count = 0;
+        const MAX_RETRIES: u32 = 3;
+        const RETRY_DELAY_SECONDS: u64 = 3;
+
+        println!("🔧 [DEBUG] Starting single analysis for '{}', batch_size={}",
+                 original_title, config.batch_size);
+
+        loop {
+            println!("🔧 [DEBUG] Single analysis attempt {} of {}", retry_count + 1, MAX_RETRIES + 1);
+            match self.try_single_analyze_scores_and_tags(original_title, file_list, config).await {
+                Ok(result) => {
+                    println!("✅ [DEBUG] Single analysis succeeded on attempt {}", retry_count + 1);
+                    return Ok(result);
+                }
+                Err(e) => {
+                    retry_count += 1;
+                    println!("❌ [DEBUG] Single analysis failed on attempt {}: {}", retry_count, e);
+
+                    if retry_count >= MAX_RETRIES {
+                        println!("💥 [DEBUG] Max retries reached for single analysis, giving up");
+                        return Err(anyhow::anyhow!("单个分析失败，已重试{}次: {}", MAX_RETRIES, e));
+                    }
+
+                    println!("⚠️ 单个分析失败，{}秒后重试 ({}/{}): {}",
+                             RETRY_DELAY_SECONDS, retry_count, MAX_RETRIES, e);
+
+                    tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_DELAY_SECONDS)).await;
+                    println!("🔄 [DEBUG] Retrying single analysis now...");
+                }
+            }
+        }
+    }
+
+    /// 尝试单个分析（不包含重试逻辑）
+    pub async fn try_single_analyze_scores_and_tags(
         &self,
         original_title: &str,
         file_list: &[String],
@@ -330,8 +406,8 @@ impl GeminiClient {
             original_title, files_json_array
         );
 
-        // --- 调试输出: 打印最终的Prompt ---
-        println!("[AI PROMPT] Full prompt being sent to AI:\n---\n{}\n---", prompt);
+        // 移除详细的Prompt日志以简化输出
+        // println!("[AI PROMPT] Full prompt being sent to AI:\n---\n{}\n---", prompt);
 
         let request_body = GeminiRequest {
             contents: vec![Content {
@@ -350,8 +426,8 @@ impl GeminiClient {
             if let Some(part) = candidate.content.parts.get(0) {
                 let cleaned_text = part.text.trim().replace("```json", "").replace("```", "");
 
-                // --- 调试输出: 打印原始的AI响应 ---
-                println!("[AI RESPONSE] Raw response from AI:\n---\n{}\n---", cleaned_text);
+                // 移除详细的响应日志以简化输出
+                // println!("[AI RESPONSE] Raw response from AI:\n---\n{}\n---", cleaned_text);
                 
                 #[derive(Deserialize)]
                 struct AnalysisResponse {
@@ -374,6 +450,180 @@ impl GeminiClient {
         }
         Err(anyhow::anyhow!("Gemini响应中未找到有效内容"))
     }
+
+    /// 真正的批量分析实现，支持重试机制
+    async fn batch_analyze_multiple_items_impl(
+        &self,
+        items: &[BatchAnalysisItem],
+        config: &LlmConfig,
+    ) -> Result<Vec<BatchAnalysisResult>> {
+        let mut retry_count = 0;
+        const MAX_RETRIES: u32 = 3;
+        const RETRY_DELAY_SECONDS: u64 = 3;
+
+        println!("🔧 [DEBUG] Starting batch analysis with {} items, batch_size={}",
+                 items.len(), config.batch_size);
+
+        loop {
+            println!("🔧 [DEBUG] Attempt {} of {}", retry_count + 1, MAX_RETRIES + 1);
+            match self.try_batch_analyze_multiple_items(items, config).await {
+                Ok(results) => {
+                    println!("✅ [DEBUG] Batch analysis succeeded on attempt {}", retry_count + 1);
+                    return Ok(results);
+                }
+                Err(e) => {
+                    retry_count += 1;
+                    println!("❌ [DEBUG] Batch analysis failed on attempt {}: {}", retry_count, e);
+
+                    if retry_count >= MAX_RETRIES {
+                        println!("💥 [DEBUG] Max retries reached, giving up");
+                        return Err(anyhow::anyhow!("批量分析失败，已重试{}次: {}", MAX_RETRIES, e));
+                    }
+
+                    println!("⚠️ 批量分析失败，{}秒后重试 ({}/{}): {}",
+                             RETRY_DELAY_SECONDS, retry_count, MAX_RETRIES, e);
+
+                    tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_DELAY_SECONDS)).await;
+                    println!("🔄 [DEBUG] Retrying now...");
+                }
+            }
+        }
+    }
+
+    /// 尝试批量分析（不包含重试逻辑）
+    async fn try_batch_analyze_multiple_items(
+        &self,
+        items: &[BatchAnalysisItem],
+        config: &LlmConfig,
+    ) -> Result<Vec<BatchAnalysisResult>> {
+        if items.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        let normalized_base = normalize_api_base(&config.api_base);
+        let url = format!(
+            "{}/models/{}:generateContent?key={}",
+            normalized_base, config.model, config.api_key
+        );
+
+        // 构建批量分析的 prompt
+        let items_json = serde_json::to_string_pretty(items)?;
+
+        let prompt = format!(
+            r#"
+作为媒体资源批量分析引擎，请对以下多个项目进行分析。对每个项目，你需要根据以下三项独立任务进行分析，并严格按照JSON格式返回结果。
+
+**任务1：精简标题**
+- **输入**: 原始标题字符串。
+- **规则**:
+  1. 仅输出作品名称和剧集信息，移除所有其他内容（广告、网址、推广信息、画质、格式等）。
+  2. 作品名称：如有多个作品名称或多个语言版本，按英语 → 汉语 → 其他语言的顺序全部输出，用空格分隔。
+  3. 剧集信息：如有多个季数或集数，全部输出（如同时有第二季和第三季输出S02 S03，同时有第二季第三集和第一季第二集输出S01E02 S02E03），如原始标题中没有显示则不输出。
+  4. 格式：作品名称（多个名称用空格分隔）+ 剧集信息（多个季集用空格分隔），中间用空格分隔。
+- **输出**: 返回精简后的标题字符串。
+
+**任务2：计算纯净度分数**
+- **输入**: 文件名列表 (JSON Array)。
+- **规则**:
+  1. 遍历列表中的每个文件名。
+  2. 根据以下标准为每个文件打分：
+     - **0分**: 纯广告文件（如 `.txt`, `.url`, 或包含明确广告词语的文件）。
+     - **80分**: 文件名包含广告信息（如网址）的媒体资源文件。
+     - **100分**: 文件名干净、不含任何广告信息的媒体资源文件。
+  3. 计算所有文件分数的**平均值**，并四舍五入为整数。
+- **输出**: 返回一个0-100之间的整数作为最终纯净度分数。
+
+**任务3：提取标签**
+- **输入**: 原始标题字符串。
+- **规则**:
+  1. **严格按顺序**提取以下4类标签，每类最多1个，总共最多4个标签：
+     - **画质**: 使用标准格式（如720p、1080p、4K、8K等）
+     - **语言**: 使用英语输出（如Chinese、Korean、Japanese、English等）
+     - **字幕**: 按字幕语言输出（如Chinese Sub、English Sub、Korean Sub等）
+     - **特殊格式**: 使用英语输出（如BluRay、Dolby、HDR、DV等）
+  2. 如果某类信息无法从原始标题中获取，该位置留空，不要编造。
+  3. 严格按照上述顺序排列，最多输出4个标签。
+- **输出**: 返回包含标签的字符串数组，最多4个元素。
+
+**输入数据**:
+```json
+{}
+```
+
+**输出要求**:
+- 严格按照以下JSON格式返回，不要包含任何额外的解释或Markdown标记。
+- results数组中的每个对象对应输入中的一个项目（按相同顺序）。
+- `cleaned_title` 对应任务1的输出。
+- `purity_score` 对应任务2的输出。
+- `tags` 对应任务3的输出。
+
+**示例输出:**
+```json
+{{
+  "results": [
+    {{
+      "cleaned_title": "Transformers Batman 变形金刚 蝙蝠侠 S01E02 S02E03",
+      "purity_score": 95,
+      "tags": ["4K", "Chinese", "Chinese Sub", "BluRay"]
+    }}
+  ]
+}}
+```
+"#,
+            items_json
+        );
+
+        // 移除详细的Prompt日志以简化输出
+        // println!("[BATCH AI PROMPT] 批量分析prompt:\n---\n{}\n---", prompt);
+
+        let request_body = GeminiRequest {
+            contents: vec![Content {
+                parts: vec![Part { text: prompt }],
+            }],
+        };
+
+        let response = self.client.post(&url).json(&request_body).send().await?;
+        if !response.status().is_success() {
+            let error_body = response.text().await.unwrap_or_default();
+            return Err(anyhow::anyhow!("API请求失败: {}", error_body));
+        }
+
+        let gemini_response = response.json::<GeminiResponse>().await?;
+        if let Some(candidate) = gemini_response.candidates.get(0) {
+            if let Some(part) = candidate.content.parts.get(0) {
+                let cleaned_text = part.text.trim().replace("```json", "").replace("```", "");
+
+                // 移除详细的响应日志以简化输出
+                // println!("[BATCH AI RESPONSE] 批量分析响应:\n---\n{}\n---", cleaned_text);
+
+                #[derive(Deserialize)]
+                struct BatchAnalysisResponse {
+                    results: Vec<BatchAnalysisResult>,
+                }
+
+                let batch_response: BatchAnalysisResponse = serde_json::from_str(&cleaned_text)
+                    .map_err(|e| {
+                        anyhow::anyhow!(
+                            "解析批量分析响应JSON失败: {}. Raw text: {}",
+                            e,
+                            cleaned_text
+                        )
+                    })?;
+
+                // 验证结果数量是否匹配
+                if batch_response.results.len() != items.len() {
+                    return Err(anyhow::anyhow!(
+                        "批量分析结果数量不匹配: 期望{}, 实际{}",
+                        items.len(),
+                        batch_response.results.len()
+                    ));
+                }
+
+                return Ok(batch_response.results);
+            }
+        }
+        Err(anyhow::anyhow!("Gemini响应中未找到有效内容"))
+    }
 }
 
 // --- 6. 公共API函数 ---
@@ -388,10 +638,8 @@ pub async fn test_connection(config: &LlmConfig) -> Result<String> {
         normalized_base, config.model, config.api_key
     );
 
-    // 添加调试信息帮助用户诊断问题
-    println!("🔧 [连接测试] 原始URL: {}", config.api_base);
-    println!("🔧 [连接测试] 标准化URL: {}", normalized_base);
-    println!("🔧 [连接测试] 完整请求URL: {}", url);
+    // 简化调试信息
+    println!("🔧 Testing connection to: {}", url);
     let request_body = GeminiRequest {
         contents: vec![Content {
             parts: vec![Part {
@@ -403,14 +651,12 @@ pub async fn test_connection(config: &LlmConfig) -> Result<String> {
     let response = client.post(&url).json(&request_body).send().await?;
 
     let status = response.status();
-    println!("🔧 [连接测试] 响应状态码: {}", status);
-
     if status.is_success() {
-        println!("✅ [连接测试] 连接成功！");
+        println!("✅ Connection successful (Status: {}).", status);
         Ok("连接成功".to_string())
     } else {
         let error_body = response.text().await.unwrap_or_default();
-        println!("❌ [连接测试] 错误响应: {}", error_body);
+        println!("❌ Connection failed (Status: {}): {}", status, error_body);
 
         // 为常见错误提供更友好的提示
         let error_message = match status.as_u16() {

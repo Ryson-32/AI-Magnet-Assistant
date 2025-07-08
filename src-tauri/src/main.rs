@@ -37,10 +37,8 @@ async fn analyze_resource(
 
     match client.batch_analyze_scores_and_tags(&result.title, &result.file_list, &llm_config).await {
         Ok((cleaned_title, score, tags)) => {
-            // --- 调试输出 ---
-            println!("[AI DEBUG] Original Title: '{}'", result.title);
-            println!("[AI DEBUG] Cleaned Title: '{}'", cleaned_title);
-            // --- 调试输出结束 ---
+            // 简化调试输出
+            println!("[AI] Analyzed: '{}' -> '{}'", result.title, cleaned_title);
 
             let final_title = if cleaned_title.is_empty() {
                 clean_title_fallback(&result.title)
@@ -55,6 +53,7 @@ async fn analyze_resource(
                 magnet_link: result.magnet_link,
                 file_size: result.file_size,
                 file_list: result.file_list,
+                error: None,
             })
         }
         Err(e) => Err(e.to_string()),
@@ -140,8 +139,7 @@ async fn search_multi_page(
     let has_extraction_config = !llm_config.extraction_config.api_key.is_empty();
     let has_analysis_config = !llm_config.analysis_config.api_key.is_empty();
 
-    println!("🔧 LLM extraction config available: {}", has_extraction_config);
-    println!("🔧 LLM analysis config available: {}", has_analysis_config);
+    println!("🔧 LLM Config: Extraction={}, Analysis={}", has_extraction_config, has_analysis_config);
 
     // 分离 clmclm.com 和自定义搜索引擎
     let clmclm_enabled = enabled_engines.iter().any(|e| &e.name == "clmclm.com");
@@ -152,22 +150,26 @@ async fn search_multi_page(
 
     // 转换为llm_service::LlmConfig格式
     let extraction_config = if has_extraction_config {
+        println!("🔧 Extraction Config: batch_size={}", llm_config.extraction_config.batch_size);
         Some(llm_service::LlmConfig {
             provider: llm_config.extraction_config.provider.clone(),
             api_key: llm_config.extraction_config.api_key.clone(),
             api_base: llm_config.extraction_config.api_base.clone(),
             model: llm_config.extraction_config.model.clone(),
+            batch_size: llm_config.extraction_config.batch_size,
         })
     } else {
         None
     };
 
     let analysis_config = if has_analysis_config {
+        println!("🔧 Analysis Config: batch_size={}", llm_config.analysis_config.batch_size);
         Some(llm_service::LlmConfig {
             provider: llm_config.analysis_config.provider.clone(),
             api_key: llm_config.analysis_config.api_key.clone(),
             api_base: llm_config.analysis_config.api_base.clone(),
             model: llm_config.analysis_config.model.clone(),
+            batch_size: llm_config.analysis_config.batch_size,
         })
     } else {
         None
@@ -175,8 +177,7 @@ async fn search_multi_page(
 
     // 创建搜索核心，只包含启用的搜索引擎
     let search_core = if !custom_engines.is_empty() || clmclm_enabled {
-        println!("🔧 Creating search core with {} custom engines, clmclm.com: {}",
-                custom_engines.len(), clmclm_enabled);
+        println!("🔧 Creating search core: {} custom engines, clmclm.com: {}", custom_engines.len(), clmclm_enabled);
         searcher::create_ai_enhanced_search_core(
             extraction_config,
             analysis_config,
@@ -291,6 +292,7 @@ async fn test_extraction_connection(config: app_state::SingleLlmConfig) -> Resul
         api_key: config.api_key,
         api_base: config.api_base,
         model: config.model,
+        batch_size: config.batch_size,
     };
     llm_service::test_connection(&llm_config).await.map_err(|e| e.to_string())
 }
@@ -302,6 +304,7 @@ async fn test_analysis_connection(config: app_state::SingleLlmConfig) -> Result<
         api_key: config.api_key,
         api_base: config.api_base,
         model: config.model,
+        batch_size: config.batch_size,
     };
     llm_service::test_connection(&llm_config).await.map_err(|e| e.to_string())
 }
@@ -313,7 +316,215 @@ async fn test_analysis_connection(config: app_state::SingleLlmConfig) -> Result<
 
 #[tauri::command]
 async fn get_llm_config(state: tauri::State<'_, app_state::AppState>) -> Result<app_state::LlmConfig, String> {
-    Ok(app_state::get_llm_config(&state))
+    let config = app_state::get_llm_config(&state);
+    println!("🔧 Get LLM config: extraction_batch_size={}, analysis_batch_size={}", config.extraction_config.batch_size, config.analysis_config.batch_size);
+    Ok(config)
+}
+
+#[tauri::command]
+async fn test_batch_analysis(state: tauri::State<'_, app_state::AppState>) -> Result<String, String> {
+    let config = app_state::get_llm_config(&state);
+
+    println!("🧪 Testing batch analysis... (batch_size={})", config.analysis_config.batch_size);
+
+    // 创建测试数据
+    let test_items = vec![
+        llm_service::BatchAnalysisItem {
+            title: "Test Movie 2024 1080p BluRay".to_string(),
+            file_list: vec![
+                "Test.Movie.2024.1080p.BluRay.x264.mkv".to_string(),
+                "Sample.mkv".to_string(),
+            ],
+        },
+        llm_service::BatchAnalysisItem {
+            title: "Another Movie S01E01".to_string(),
+            file_list: vec![
+                "Another.Movie.S01E01.1080p.WEB-DL.mkv".to_string(),
+                "Subtitles.srt".to_string(),
+            ],
+        },
+    ];
+
+    // 转换配置
+    let llm_config = llm_service::LlmConfig {
+        provider: config.analysis_config.provider,
+        api_key: config.analysis_config.api_key,
+        api_base: config.analysis_config.api_base,
+        model: config.analysis_config.model,
+        batch_size: config.analysis_config.batch_size,
+    };
+
+    // 测试批量分析
+    let client = llm_service::GeminiClient::new();
+    match client.batch_analyze_multiple_items(&test_items, &llm_config).await {
+        Ok(results) => {
+            println!("🧪 [TEST] Batch analysis succeeded with {} results", results.len());
+            Ok(format!("Batch analysis test successful! Processed {} items with batch_size={}",
+                      results.len(), config.analysis_config.batch_size))
+        }
+        Err(e) => {
+            println!("🧪 [TEST] Batch analysis failed: {}", e);
+            Err(format!("Batch analysis test failed: {}", e))
+        }
+    }
+}
+
+#[tauri::command]
+async fn batch_analyze_resources(
+    state: tauri::State<'_, app_state::AppState>,
+    results: Vec<searcher::SearchResult>,
+) -> Result<Vec<llm_service::DetailedAnalysisResult>, String> {
+    let config = app_state::get_llm_config(&state);
+
+    println!("🔧 Frontend batch analysis: {} results, batch_size={}", results.len(), config.analysis_config.batch_size);
+
+    if results.is_empty() {
+        return Ok(Vec::new());
+    }
+
+    // 转换为批量分析格式
+    let batch_items: Vec<llm_service::BatchAnalysisItem> = results
+        .iter()
+        .filter(|r| !r.file_list.is_empty())
+        .map(|r| llm_service::BatchAnalysisItem {
+            title: r.title.clone(),
+            file_list: r.file_list.clone(),
+        })
+        .collect();
+
+    if batch_items.is_empty() {
+        println!("⚠️ No valid results with file lists for batch analysis");
+        return Ok(Vec::new());
+    }
+
+    // 转换配置
+    let llm_config = llm_service::LlmConfig {
+        provider: config.analysis_config.provider,
+        api_key: config.analysis_config.api_key,
+        api_base: config.analysis_config.api_base,
+        model: config.analysis_config.model,
+        batch_size: config.analysis_config.batch_size,
+    };
+
+    let client = llm_service::GeminiClient::new();
+    let batch_size = config.analysis_config.batch_size as usize;
+    let mut all_results = Vec::new();
+    let mut failed_batches = 0;
+    const MAX_FAILED_BATCHES: usize = 3; // 最多允许3个批次失败
+
+    // 分批处理
+    for (batch_index, chunk) in batch_items.chunks(batch_size).enumerate() {
+        println!("🔄 Frontend processing batch {}/{} ({} items)",
+                 batch_index + 1,
+                 (batch_items.len() + batch_size - 1) / batch_size,
+                 chunk.len());
+
+        // 如果失败的批次太多，直接返回错误
+        if failed_batches >= MAX_FAILED_BATCHES {
+            return Err(format!("Too many batch failures ({}/{}), aborting analysis",
+                              failed_batches, MAX_FAILED_BATCHES));
+        }
+
+        match client.batch_analyze_multiple_items(chunk, &llm_config).await {
+            Ok(batch_results) => {
+                // 将批量结果转换为 DetailedAnalysisResult
+                for (i, analysis_result) in batch_results.iter().enumerate() {
+                    if let Some(original_result) = results.get(batch_index * batch_size + i) {
+                        all_results.push(llm_service::DetailedAnalysisResult {
+                            title: if analysis_result.cleaned_title.is_empty() {
+                                clean_title_fallback(&original_result.title)
+                            } else {
+                                analysis_result.cleaned_title.clone()
+                            },
+                            purity_score: analysis_result.purity_score,
+                            tags: analysis_result.tags.clone(),
+                            magnet_link: original_result.magnet_link.clone(),
+                            file_size: original_result.file_size.clone(),
+                            file_list: original_result.file_list.clone(),
+                            error: None,
+                        });
+                    }
+                }
+                println!("✅ Frontend batch {} success.", batch_index + 1);
+            }
+            Err(e) => {
+                failed_batches += 1;
+                println!("⚠️ Frontend batch {} failed ({}/{}): {}", batch_index + 1, failed_batches, MAX_FAILED_BATCHES, e);
+
+                // 如果这是最后一次尝试，直接添加失败结果而不进行单个分析
+                if failed_batches >= MAX_FAILED_BATCHES {
+                    for (i, _item) in chunk.iter().enumerate() {
+                        if let Some(original_result) = results.get(batch_index * batch_size + i) {
+                            all_results.push(llm_service::DetailedAnalysisResult {
+                                title: clean_title_fallback(&original_result.title),
+                                purity_score: 50, // 默认分数
+                                tags: vec!["Analysis Failed - Too Many Failures".to_string()],
+                                magnet_link: original_result.magnet_link.clone(),
+                                file_size: original_result.file_size.clone(),
+                                file_list: original_result.file_list.clone(),
+                                error: Some("Too many batch failures, analysis aborted".to_string()),
+                            });
+                        }
+                    }
+                    continue;
+                }
+
+                // 回退到单个分析（但限制重试次数）
+                for (i, item) in chunk.iter().enumerate() {
+                    if let Some(original_result) = results.get(batch_index * batch_size + i) {
+                        // 单个分析只尝试一次，不进行重试
+                        match tokio::time::timeout(
+                            std::time::Duration::from_secs(30), // 30秒超时
+                            client.try_single_analyze_scores_and_tags(&item.title, &item.file_list, &llm_config)
+                        ).await {
+                            Ok(Ok((cleaned_title, score, tags))) => {
+                                all_results.push(llm_service::DetailedAnalysisResult {
+                                    title: if cleaned_title.is_empty() {
+                                        clean_title_fallback(&original_result.title)
+                                    } else {
+                                        cleaned_title
+                                    },
+                                    purity_score: score,
+                                    tags,
+                                    magnet_link: original_result.magnet_link.clone(),
+                                    file_size: original_result.file_size.clone(),
+                                    file_list: original_result.file_list.clone(),
+                                    error: None,
+                                });
+                            }
+                            Ok(Err(individual_error)) => {
+                                println!("⚠️ Individual analysis for '{}' failed: {}", item.title, individual_error);
+                                all_results.push(llm_service::DetailedAnalysisResult {
+                                    title: clean_title_fallback(&original_result.title),
+                                    purity_score: 50,
+                                    tags: vec!["Individual Analysis Failed".to_string()],
+                                    magnet_link: original_result.magnet_link.clone(),
+                                    file_size: original_result.file_size.clone(),
+                                    file_list: original_result.file_list.clone(),
+                                    error: Some(format!("Individual analysis failed: {}", individual_error)),
+                                });
+                            }
+                            Err(_timeout) => {
+                                println!("⚠️ Individual analysis for '{}' timed out", item.title);
+                                all_results.push(llm_service::DetailedAnalysisResult {
+                                    title: clean_title_fallback(&original_result.title),
+                                    purity_score: 50,
+                                    tags: vec!["Analysis Timeout".to_string()],
+                                    magnet_link: original_result.magnet_link.clone(),
+                                    file_size: original_result.file_size.clone(),
+                                    file_list: original_result.file_list.clone(),
+                                    error: Some("Analysis timed out after 30 seconds".to_string()),
+                                });
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    println!("🎉 Frontend batch analysis completed: {} results processed", all_results.len());
+    Ok(all_results)
 }
 
 #[tauri::command]
@@ -322,11 +533,14 @@ async fn update_llm_config(
     state: tauri::State<'_, app_state::AppState>,
     config: app_state::LlmConfig,
 ) -> Result<(), String> {
+    println!("🔧 Updating LLM config: extraction_batch_size={}, analysis_batch_size={}", config.extraction_config.batch_size, config.analysis_config.batch_size);
+
     app_state::update_llm_config(&state, config).map_err(|e| e.to_string())?;
 
     // 保存状态到文件
     app_state::save_app_state(&app_handle, &state).map_err(|e| e.to_string())?;
 
+    println!("🔧 LLM config saved.");
     Ok(())
 }
 
@@ -366,7 +580,9 @@ fn main() {
             test_connection,
             test_extraction_connection,
             test_analysis_connection,
+            test_batch_analysis,
             analyze_resource,
+            batch_analyze_resources,
             // 收藏夹命令
             add_to_favorites,
             get_all_favorites,
