@@ -1,112 +1,112 @@
-# Developer Manual for AI Magnet Assistant
+# Developer Manual for AI-Magnet-Assistant
+
+This document provides a detailed guide for developers working on the AI-Magnet-Assistant project. It covers the project's architecture, technical stack, and development workflow.
 
 ## 1. Project Overview
 
-Welcome to the developer manual for AI Magnet Assistant. This document provides all the necessary information for developers to get started with building, testing, and contributing to the project.
+**AI-Magnet-Assistant** is a smart magnet link search and optimization tool built on the Tauri framework. It aims to solve the problem of cluttered and low-quality information in traditional magnet link searches.
 
-AI Magnet Assistant is a desktop application designed to optimize and manage magnet links. It leverages AI to filter and prioritize links based on user-defined criteria. The application is built using a modern technology stack that ensures a responsive user interface and a powerful, efficient backend.
+### Core Features
 
-*   **Technology Stack**:
-    *   **Frontend**: [Vue.js](https://vuejs.org/) - A progressive JavaScript framework for building user interfaces.
-    *   **Backend**: [Rust](https://www.rust-lang.org/) - A high-performance, memory-safe systems programming language.
-    *   **Framework**: [Tauri](https://tauri.app/) - A toolkit for building lightweight, secure, and cross-platform desktop applications with a web frontend.
+*   **Multi-Engine Aggregated Search:** Supports simultaneous searching from multiple configurable search engines (including the built-in `clmclm.com` and user-defined engines).
+*   **AI-Powered Analysis and Filtering:** Utilizes a Large Language Model (LLM), such as Google Gemini, for in-depth analysis of search results, enabling:
+    *   **Title Cleaning:** Automatically removes ads and irrelevant information from titles.
+    *   **Content Purity Assessment:** Evaluates the "purity" of resource content based on the file list and assigns a score.
+    *   **Smart Tagging:** Automatically generates content-related tags for resources.
+*   **Result Optimization and Sorting:** Allows users to sort and filter search results based on AI scores, file size, relevance, and other criteria.
+*   **Customization:** Users can define custom search engines, set priority keywords to influence search result ranking, and configure their own LLM API keys.
+*   **Favorites Functionality:** Users can save magnet links of interest for later viewing and management.
 
-## 2. Architecture
+## 2. Technical Stack Details
 
-The project follows a standard Tauri architecture, which separates the frontend web view from the backend core logic. This separation allows for a clear distinction between UI-related code and business logic.
+The project is architected with a separation of concerns between the frontend and backend.
 
-*   **Frontend (`src/`)**: The frontend is a standard Vue.js application. It is responsible for rendering the user interface and handling user interactions. All UI components, views, and assets are located in this directory. It communicates with the backend through a JavaScript bridge provided by Tauri.
+### 2.1. Frontend (Vue.js 3)
 
-*   **Backend (`src-tauri/`)**: The backend is a Rust application that manages the core logic. This includes tasks such as searching, filtering magnet links, interacting with the file system, and managing application state. The backend exposes functions that can be invoked from the frontend, enabling seamless communication between the two layers.
+*   **Framework:** [Vue.js 3](https://vuejs.org/) with the Composition API for building a reactive and maintainable UI.
+*   **Build Tool:** [Vite](https://vitejs.dev/) provides a fast and lean development experience with features like Hot Module Replacement (HMR).
+*   **Language:** [TypeScript](https://www.typescriptlang.org/) is used for static typing, improving code quality and developer productivity.
+*   **UI:** The user interface is built with Single File Components (`.vue`), encapsulating the template, script, and style for each component.
+*   **Tauri API:** The frontend communicates with the Rust backend via the `@tauri-apps/api` package, which provides JavaScript bindings for invoking Rust commands.
 
-This dual-layer architecture allows developers to work on the frontend and backend independently while ensuring they integrate smoothly.
+### 2.2. Backend (Rust)
+
+*   **Language:** [Rust](https://www.rust-lang.org/) is chosen for its performance, safety, and concurrency features, making it ideal for the backend logic.
+*   **Core Libraries:**
+    *   `tauri`: The core framework for building the desktop application.
+    *   `tokio`: An asynchronous runtime for Rust, used for managing concurrent operations like network requests.
+    *   `reqwest`: A powerful and ergonomic HTTP client for making requests to search engines.
+    *   `scraper`: A library for parsing and querying HTML documents, used to extract data from web pages.
+    *   `serde`: A framework for serializing and deserializing Rust data structures efficiently, primarily used for JSON communication with the frontend.
+    *   `regex`: Used for pattern matching and text manipulation, serving as a fallback for title cleaning when AI services are unavailable.
+
+### 2.3. Desktop Framework (Tauri)
+
+*   **[Tauri](https://tauri.app/):** A framework for building lightweight, secure, and cross-platform desktop applications using web technologies. It bundles the Vue.js frontend and Rust backend into a single binary, providing a native-like experience with a smaller footprint than alternatives like Electron.
 
 ## 3. Project Structure
 
-The project's directory structure is organized to maintain a clean and scalable codebase. Here are the key directories and files:
+The project is organized into two main directories: `src/` for the frontend and `src-tauri/` for the backend.
 
-```
-.
-├── src/                      # Frontend source code (Vue.js)
-│   ├── components/           # Reusable Vue components
-│   ├── App.vue               # Main application component
-│   └── main.ts               # Entry point for the Vue application
-├── src-tauri/                # Backend source code (Rust)
-│   ├── src/
-│   │   ├── main.rs           # Main entry point for the Rust application
-│   │   └── lib.rs            # Library crate for core logic
-│   ├── tauri.conf.json       # Tauri configuration file
-│   └── Cargo.toml            # Rust dependency management
-├── DEVELOPER_MANUAL.md       # This developer manual
-├── package.json              # Node.js dependencies and scripts
-└── README.md                 # Project README file
-```
+*   **`package.json`**: Defines project metadata, frontend dependencies (e.g., `vue`, `@tauri-apps/api`), and npm scripts for development and building.
+*   **`vite.config.ts`**: The configuration file for Vite, used to customize the frontend development server and build process.
+*   **`src/`**: Contains all frontend source code.
+    *   `main.ts`: The entry point for the Vue.js application.
+    *   `App.vue`: The root component that manages the overall application layout and routing.
+    *   `components/`: A directory containing all Vue components, such as `HomePage.vue`, `SettingsPage.vue`, etc. Each component corresponds to a specific feature or UI module.
+*   **`src-tauri/`**: Contains the backend Rust code and Tauri configuration.
+    *   `Cargo.toml`: The manifest file for the Rust project, defining backend dependencies and project metadata.
+    *   `tauri.conf.json`: The core configuration file for the Tauri application, defining the application identifier, window properties, build commands, and more.
+    *   `src/main.rs`: The entry point for the Rust application, where all Tauri commands exposed to the frontend are defined.
+    *   `src/searcher.rs`: Encapsulates the core search logic, including web scraping and content parsing.
+    *   `src/llm_service.rs`: Contains the client logic for interacting with the Large Language Model.
+    *   `src/app_state.rs`: Manages and persists the application's state, such as user settings and favorites.
 
-*   `src/`: Contains all the frontend code. Developers familiar with Vue.js will find this structure conventional.
-*   `src-tauri/`: Contains all the backend Rust code. The `main.rs` file sets up the Tauri application and runtime, while other modules contain the core business logic.
-*   `tauri.conf.json`: A critical file for configuring the Tauri application, including window settings, security policies, and plugin configurations.
-*   `package.json`: Defines project metadata, dependencies, and scripts for tasks like starting the development server and building the application.
-
-## 4. Development Setup
-
-Follow these steps to set up your local development environment.
+## 4. Build and Run Instructions
 
 ### Prerequisites
 
-Before you begin, ensure you have the following installed:
-*   [Node.js](https://nodejs.org/) (LTS version recommended)
-*   [Rust](https://www.rust-lang.org/tools/install) and Cargo (the Rust package manager)
+*   Install [Node.js](https://nodejs.org/) and `npm` (or `yarn`/`pnpm`).
+*   Install the [Rust](https://www.rust-lang.org/tools/install) development environment.
+*   Follow the Tauri official documentation to set up system-specific dependencies: [Tauri Prerequisites](https://tauri.app/v1/guides/getting-started/prerequisites).
 
-### Steps
+### Development Workflow
 
-1.  **Clone the Repository**:
-    ```bash
-    git clone https://github.com/Ryson-32/AI-Magnet-Assistant.git
-    cd ai-magnet-assistant
-    ```
-
-2.  **Install Dependencies**:
-    Install the necessary Node.js packages for the frontend.
+1.  **Install Frontend Dependencies:**
     ```bash
     npm install
     ```
-
-3.  **Run the Development Server**:
-    This command starts the Tauri development server, which will build both the frontend and backend, and launch the application in a development window with hot-reloading enabled.
+2.  **Run in Development Mode:**
     ```bash
     npm run tauri dev
     ```
-    Any changes made to the frontend or backend code will automatically trigger a rebuild and reload the application.
+    This command will:
+    *   Start the Vite development server for the frontend with HMR.
+    *   Compile and run the Rust backend.
+    *   Open the application in a development window.
+    Frontend changes are reflected instantly, while backend changes require a restart of the command.
 
-## 5. Building for Production
+### Production Build
 
-To create a production-ready build of the application, run the following command:
+1.  **Install Dependencies (if needed):**
+    ```bash
+    npm install
+    ```
+2.  **Build the Application:**
+    ```bash
+    npm run tauri build
+    ```
+    This command orchestrates the entire build process:
+    *   Vite builds and optimizes the frontend assets.
+    *   The Rust compiler builds the backend in release mode.
+    *   Tauri bundles everything into a native installer for your OS (e.g., `.msi` on Windows, `.dmg` on macOS), which can be found in `src-tauri/target/release/bundle/`.
 
-```bash
-npm run tauri build
-```
+---
 
-This command will compile the frontend and backend, bundle them into a native executable for your operating system (e.g., `.exe` on Windows, `.app` on macOS), and place the output in the `src-tauri/target/release/bundle/` directory.
+## 5. API Recommendation
 
-## 6. Contribution Guidelines
+Currently, only the Gemini API is supported for integration. It is recommended to use a model that supports high concurrency (e.g., gemini-2.5-flash-lite-preview-06-17) for optimal performance.
 
-We welcome contributions from the community. To ensure a smooth and collaborative process, please adhere to the following guidelines.
+## 6. Acknowledgment
 
-### Code Style
-
-*   **Frontend**: We follow the standard Vue.js style guide. Use a linter and formatter (like ESLint and Prettier) to maintain consistency.
-*   **Backend**: Adhere to standard Rust formatting conventions, which can be automatically applied using `cargo fmt`.
-
-### Branching Strategy
-
-*   Create a new branch for each feature or bug fix from the `main` branch.
-*   Use a descriptive branch name, such as `feature/new-search-filter` or `fix/login-bug`.
-
-### Pull Requests (PRs)
-
-*   Before submitting a Pull Request, ensure your code builds successfully and all tests pass.
-*   Provide a clear and concise title and description for your PR, explaining the changes and the problem they solve.
-*   Link to any relevant issues in your PR description.
-*   Request a review from one or more of the project maintainers.
-
-Thank you for contributing to AI Magnet Assistant!
+A significant portion of the code in this project was developed with the assistance of AI Development Tools. If you are interested in these AI tools, you are welcome to visit https://ai.pu.edu.kg/ to rate and review them.
