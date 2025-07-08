@@ -178,6 +178,8 @@ pub struct GenericProvider {
     url_template: String,
     client: reqwest::Client,
     llm_client: Option<Arc<dyn LlmClient>>,
+    extraction_config: Option<LlmConfig>,  // 第一次API调用配置
+    analysis_config: Option<LlmConfig>,    // 第二次API调用配置
     priority_keywords: Vec<String>,
 }
 
@@ -194,13 +196,22 @@ impl GenericProvider {
             url_template,
             client,
             llm_client: None,
+            extraction_config: None,
+            analysis_config: None,
             priority_keywords: Vec::new(),
         }
     }
 
-    /// 设置 LLM 客户端用于 AI 智能识别
-    pub fn with_llm_client(mut self, llm_client: Arc<dyn LlmClient>) -> Self {
+    /// 设置 LLM 客户端和配置用于 AI 智能识别
+    pub fn with_llm_client_and_configs(
+        mut self,
+        llm_client: Arc<dyn LlmClient>,
+        extraction_config: LlmConfig,
+        analysis_config: LlmConfig,
+    ) -> Self {
         self.llm_client = Some(llm_client);
+        self.extraction_config = Some(extraction_config);
+        self.analysis_config = Some(analysis_config);
         self
     }
 
@@ -310,8 +321,12 @@ impl GenericProvider {
 
     /// 直接调用AI进行HTML分析
     async fn call_ai_for_html_analysis(&self, html_content: &str, llm_client: Arc<dyn LlmClient>) -> Result<Vec<SearchResult>> {
+        // 获取提取配置
+        let extraction_config = self.extraction_config.as_ref()
+            .ok_or_else(|| anyhow!("Extraction config not available"))?;
+
         // 将原始HTML传递给AI服务，由llm_service.rs构建提示词
-        match llm_client.batch_extract_basic_info_from_html(html_content).await {
+        match llm_client.batch_extract_basic_info_from_html(html_content, extraction_config).await {
             Ok(batch_result) => {
                 // AI返回的JSON响应被解析到batch_result.results中
                 // 我们需要将整个结果传递给解析函数
@@ -388,6 +403,10 @@ impl GenericProvider {
             return Ok(results);
         }
 
+        // 获取分析配置
+        let analysis_config = self.analysis_config.as_ref()
+            .ok_or_else(|| anyhow!("Analysis config not available"))?;
+
         println!("🧠 Phase 3: Detailed analysis for {} priority results...", results.len());
 
         // 迭代处理每个结果，因为新的API一次只处理一个文件列表
@@ -397,7 +416,7 @@ impl GenericProvider {
                 continue;
             }
 
-            match llm_client.batch_analyze_scores_and_tags(&result.title, &result.file_list).await {
+            match llm_client.batch_analyze_scores_and_tags(&result.title, &result.file_list, analysis_config).await {
                 Ok(detailed_info) => {
                     // detailed_info is a tuple: (title, score, tags)
                     let (cleaned_title, score, tags) = detailed_info;
@@ -764,7 +783,8 @@ impl SearchCore {
 
 /// 创建带有AI功能的搜索核心
 pub fn create_ai_enhanced_search_core(
-    llm_config: Option<LlmConfig>,
+    extraction_config: Option<LlmConfig>,
+    analysis_config: Option<LlmConfig>,
     priority_keywords: Vec<String>,
     custom_engines: Vec<(String, String)>, // (name, url_template) pairs
     include_clmclm: bool // 是否包含 clmclm.com
@@ -778,13 +798,13 @@ pub fn create_ai_enhanced_search_core(
     }
 
     // 为自定义搜索引擎创建AI增强的提供商
-    if let Some(config) = llm_config {
-        let llm_client: Arc<dyn LlmClient> = Arc::new(GeminiClient::new(config));
+    if let (Some(extract_config), Some(analyze_config)) = (extraction_config, analysis_config) {
+        let llm_client: Arc<dyn LlmClient> = Arc::new(GeminiClient::new());
 
         for (name, url_template) in custom_engines {
             println!("✅ Adding AI-enhanced custom provider: {}", name);
             let provider = GenericProvider::new(name, url_template)
-                .with_llm_client(llm_client.clone())
+                .with_llm_client_and_configs(llm_client.clone(), extract_config.clone(), analyze_config.clone())
                 .with_priority_keywords(priority_keywords.clone());
             providers.push(Arc::new(provider));
         }
@@ -810,7 +830,8 @@ pub async fn search(query: &str, base_url: Option<&str>) -> Result<Vec<SearchRes
     } else {
         // 使用AI增强的搜索核心，但不包含AI配置（用于基础测试）
         let search_core = create_ai_enhanced_search_core(
-            None, // 无AI配置
+            None, // 无提取配置
+            None, // 无分析配置
             Vec::new(), // 无优先关键词
             Vec::new(), // 无自定义引擎
             true // 包含clmclm.com

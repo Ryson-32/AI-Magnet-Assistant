@@ -33,9 +33,9 @@ async fn analyze_resource(
     result: searcher::SearchResult,
     llm_config: llm_service::LlmConfig,
 ) -> Result<llm_service::DetailedAnalysisResult, String> {
-    let client = llm_service::GeminiClient::new(llm_config);
+    let client = llm_service::GeminiClient::new();
 
-    match client.batch_analyze_scores_and_tags(&result.title, &result.file_list).await {
+    match client.batch_analyze_scores_and_tags(&result.title, &result.file_list, &llm_config).await {
         Ok((cleaned_title, score, tags)) => {
             // --- 调试输出 ---
             println!("[AI DEBUG] Original Title: '{}'", result.title);
@@ -116,7 +116,6 @@ async fn search_multi_page(
     state: tauri::State<'_, app_state::AppState>,
     keyword: String,
     max_pages: Option<u32>,
-    llm_config: Option<llm_service::LlmConfig>
 ) -> Result<Vec<searcher::SearchResult>, String> {
     let pages = max_pages.unwrap_or(3);
 
@@ -134,8 +133,15 @@ async fn search_multi_page(
         .map(|pk| pk.keyword.clone())
         .collect();
 
-    // 使用前端传递的LLM配置（如果有的话）
-    println!("🔧 LLM config received from frontend: {}", llm_config.is_some());
+    // 获取LLM配置
+    let llm_config = app_state::get_llm_config(&state);
+
+    // 检查是否有有效的API密钥
+    let has_extraction_config = !llm_config.extraction_config.api_key.is_empty();
+    let has_analysis_config = !llm_config.analysis_config.api_key.is_empty();
+
+    println!("🔧 LLM extraction config available: {}", has_extraction_config);
+    println!("🔧 LLM analysis config available: {}", has_analysis_config);
 
     // 分离 clmclm.com 和自定义搜索引擎
     let clmclm_enabled = enabled_engines.iter().any(|e| &e.name == "clmclm.com");
@@ -144,12 +150,36 @@ async fn search_multi_page(
         .map(|e| (e.name.clone(), e.url_template.clone()))
         .collect();
 
+    // 转换为llm_service::LlmConfig格式
+    let extraction_config = if has_extraction_config {
+        Some(llm_service::LlmConfig {
+            provider: llm_config.extraction_config.provider.clone(),
+            api_key: llm_config.extraction_config.api_key.clone(),
+            api_base: llm_config.extraction_config.api_base.clone(),
+            model: llm_config.extraction_config.model.clone(),
+        })
+    } else {
+        None
+    };
+
+    let analysis_config = if has_analysis_config {
+        Some(llm_service::LlmConfig {
+            provider: llm_config.analysis_config.provider.clone(),
+            api_key: llm_config.analysis_config.api_key.clone(),
+            api_base: llm_config.analysis_config.api_base.clone(),
+            model: llm_config.analysis_config.model.clone(),
+        })
+    } else {
+        None
+    };
+
     // 创建搜索核心，只包含启用的搜索引擎
     let search_core = if !custom_engines.is_empty() || clmclm_enabled {
         println!("🔧 Creating search core with {} custom engines, clmclm.com: {}",
                 custom_engines.len(), clmclm_enabled);
         searcher::create_ai_enhanced_search_core(
-            llm_config,
+            extraction_config,
+            analysis_config,
             priority_keyword_strings,
             custom_engines,
             clmclm_enabled
@@ -254,6 +284,28 @@ async fn test_connection(config: llm_service::LlmConfig) -> Result<String, Strin
     llm_service::test_connection(&config).await.map_err(|e| e.to_string())
 }
 
+#[tauri::command]
+async fn test_extraction_connection(config: app_state::SingleLlmConfig) -> Result<String, String> {
+    let llm_config = llm_service::LlmConfig {
+        provider: config.provider,
+        api_key: config.api_key,
+        api_base: config.api_base,
+        model: config.model,
+    };
+    llm_service::test_connection(&llm_config).await.map_err(|e| e.to_string())
+}
+
+#[tauri::command]
+async fn test_analysis_connection(config: app_state::SingleLlmConfig) -> Result<String, String> {
+    let llm_config = llm_service::LlmConfig {
+        provider: config.provider,
+        api_key: config.api_key,
+        api_base: config.api_base,
+        model: config.model,
+    };
+    llm_service::test_connection(&llm_config).await.map_err(|e| e.to_string())
+}
+
 // 注意：load_llm_config_from_app 和 load_llm_config_from_file 函数已被删除
 // 因为它们未被使用，LLM配置现在通过前端直接传递
 
@@ -312,6 +364,8 @@ fn main() {
         .invoke_handler(tauri::generate_handler![
             search_multi_page,
             test_connection,
+            test_extraction_connection,
+            test_analysis_connection,
             analyze_resource,
             // 收藏夹命令
             add_to_favorites,

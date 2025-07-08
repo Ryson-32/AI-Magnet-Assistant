@@ -208,21 +208,35 @@ async function search() {
   }
 
   isSearching.value = true;
-  searchStatus.value = "Searching...";
   results.value = [];
 
   try {
-    // Load LLM config and pass to backend
+    // Load LLM config and enabled engines to determine if AI will be used
     const llmConfig = await invoke("get_llm_config") as any;
+    const engines = await invoke("get_all_engines") as any[];
+    const enabledEngines = engines.filter((e: any) => e.is_enabled);
+
+    // Check if AI will be used for HTML extraction
+    const hasCustomEngines = enabledEngines.some((e: any) => e.name !== "clmclm.com");
+    const hasExtractionConfig = llmConfig?.extraction_config?.api_key;
+    const willUseAI = hasCustomEngines && hasExtractionConfig;
+
+    // Display model information only if AI will be used
+    let modelInfo = "";
+    if (willUseAI) {
+      const extractionModel = llmConfig.extraction_config?.model || "Not configured";
+      modelInfo = ` (using ${extractionModel} for HTML extraction)`;
+    }
+
+    searchStatus.value = `Searching...${modelInfo}`;
 
     const searchResults = await invoke("search_multi_page", {
       keyword: keyword.value,
       maxPages: maxPages.value,
-      llmConfig: llmConfig && llmConfig.api_key ? llmConfig : null,
     });
 
     results.value = searchResults as any[];
-    searchStatus.value = `Found ${results.value.length} results`;
+    searchStatus.value = `Found ${results.value.length} results${modelInfo}`;
 
     // 1. First sort to identify priority items
     await sortResults(results.value);
@@ -246,21 +260,30 @@ async function analyzeResults() {
   try {
     // Load LLM config
     const llmConfig = await invoke("get_llm_config") as any;
-    if (!llmConfig || !llmConfig.api_key) {
+    if (!llmConfig || !llmConfig.analysis_config?.api_key) {
       searchStatus.value = "AI analysis requires API key configuration. Please check Settings.";
       return;
     }
 
     const startTime = Date.now();
-    searchStatus.value = `Analyzing ${results.value.length} results with AI...`;
+    const analysisModel = llmConfig.analysis_config?.model || "Unknown";
+    searchStatus.value = `Analyzing ${results.value.length} results with AI (using ${analysisModel})...`;
 
     // 并发分析所有结果
     let completedCount = 0;
     const analysisPromises = results.value.map(async (result: any) => {
       try {
+        // 转换为llm_service::LlmConfig格式
+        const analysisConfig = {
+          provider: llmConfig.analysis_config.provider,
+          api_key: llmConfig.analysis_config.api_key,
+          api_base: llmConfig.analysis_config.api_base,
+          model: llmConfig.analysis_config.model,
+        };
+
         const rawAnalysis = await invoke('analyze_resource', {
           result: result,
-          llmConfig: llmConfig,
+          llmConfig: analysisConfig,
         });
         let analysis;
 
@@ -289,7 +312,7 @@ async function analyzeResults() {
         result.analysis = { error: `Analysis Failed: ${e}` };
       } finally {
         completedCount++;
-        searchStatus.value = `Analyzing ${results.value.length} results with AI (${completedCount}/${results.value.length} completed)...`;
+        searchStatus.value = `Analyzing ${results.value.length} results with AI (${completedCount}/${results.value.length} completed, using ${analysisModel})...`;
       }
     });
 
@@ -300,7 +323,7 @@ async function analyzeResults() {
     const duration = ((endTime - startTime) / 1000).toFixed(1);
 
     // 结果已直接更新，只需更新状态
-    searchStatus.value = `AI analysis completed in ${duration}s (${results.value.length} results processed)`;
+    searchStatus.value = `AI analysis completed in ${duration}s (${results.value.length} results processed using ${analysisModel})`;
   } catch (error) {
     console.error('AI analysis failed:', error);
     searchStatus.value = `AI analysis failed: ${error}`;

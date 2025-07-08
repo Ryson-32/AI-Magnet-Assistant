@@ -7,66 +7,200 @@
 
     <div class="settings-section">
       <div class="section-header">
-        <h2>LLM Configuration</h2>
-        <p>Configure AI services for intelligent content analysis</p>
+        <h2>AI Configuration</h2>
+        <p>Configure your AI providers for intelligent content analysis</p>
       </div>
-      
-      <form @submit.prevent="saveLlmConfig" class="settings-form">
-        <div class="form-group">
-          <label for="provider">Provider</label>
-          <select id="provider" v-model="llmConfig.provider">
-            <option value="gemini">Google Gemini</option>
-            <option value="openai">OpenAI</option>
-          </select>
-        </div>
 
-        <div class="form-group">
-          <label for="apiKey">API Key</label>
-          <div class="input-with-button">
-            <input 
-              id="apiKey"
-              v-model="llmConfig.api_key" 
-              type="password" 
-              placeholder="Enter your API key..."
+      <!-- 第一次API调用配置：HTML提取 -->
+      <div class="ai-config-section">
+        <h3>HTML Content Extraction (First API Call)</h3>
+        <p class="config-description">Used to extract magnet links and basic information from search result pages</p>
+
+        <div class="settings-form">
+          <div class="form-group">
+            <label for="extractionProvider">Provider</label>
+            <select id="extractionProvider" v-model="llmConfig.extraction_config.provider">
+              <option value="gemini">Google Gemini</option>
+              <option value="openai">OpenAI</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="extractionApiKey">API Key</label>
+            <div class="input-with-button">
+              <input
+                id="extractionApiKey"
+                v-model="llmConfig.extraction_config.api_key"
+                type="password"
+                placeholder="Enter your API key..."
+                required
+              />
+              <button type="button" @click="testExtractionConnection" class="test-btn" :disabled="isTestingExtraction">
+                {{ isTestingExtraction ? 'Testing...' : 'Test' }}
+              </button>
+            </div>
+            <small class="help-text">
+              Your API key is stored securely and only used for AI analysis
+            </small>
+          </div>
+
+          <div class="form-group">
+            <label for="extractionApiBase">API Base URL</label>
+            <input
+              id="extractionApiBase"
+              v-model="llmConfig.extraction_config.api_base"
+              type="url"
+              placeholder="e.g., https://generativelanguage.googleapis.com"
               required
             />
-            <button type="button" @click="testApiConnection" class="test-btn" :disabled="isTesting">
-              {{ isTesting ? 'Testing...' : 'Test' }}
-            </button>
           </div>
-          <small class="help-text">
-            Your API key is stored securely and only used for AI analysis
-          </small>
+
+          <div class="form-group">
+            <label for="extractionModel">Model</label>
+            <input
+              id="extractionModel"
+              v-model="llmConfig.extraction_config.model"
+              type="text"
+              placeholder="e.g., gemini-2.5-flash-lite-preview-06-17"
+              required
+            />
+          </div>
+        </div>
+      </div>
+
+      <!-- 第二次API调用配置：内容分析 -->
+      <div class="ai-config-section">
+        <h3>Content Analysis (Second API Call)</h3>
+        <p class="config-description">Used to analyze content quality, generate tags, and clean titles</p>
+
+        <div class="settings-form">
+          <div class="form-group">
+            <label for="analysisProvider">Provider</label>
+            <select id="analysisProvider" v-model="llmConfig.analysis_config.provider">
+              <option value="gemini">Google Gemini</option>
+              <option value="openai">OpenAI</option>
+            </select>
+          </div>
+
+          <div class="form-group">
+            <label for="analysisApiKey">API Key</label>
+            <div class="input-with-button">
+              <input
+                id="analysisApiKey"
+                v-model="llmConfig.analysis_config.api_key"
+                type="password"
+                placeholder="Enter your API key..."
+                required
+              />
+              <button type="button" @click="testAnalysisConnection" class="test-btn" :disabled="isTestingAnalysis">
+                {{ isTestingAnalysis ? 'Testing...' : 'Test' }}
+              </button>
+            </div>
+            <small class="help-text">
+              Your API key is stored securely and only used for AI analysis
+            </small>
+          </div>
+
+          <div class="form-group">
+            <label for="analysisApiBase">API Base URL</label>
+            <input
+              id="analysisApiBase"
+              v-model="llmConfig.analysis_config.api_base"
+              type="url"
+              placeholder="e.g., https://generativelanguage.googleapis.com"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="analysisModel">Model</label>
+            <input
+              id="analysisModel"
+              v-model="llmConfig.analysis_config.model"
+              type="text"
+              placeholder="e.g., gemini-2.5-flash-lite-preview-06-17"
+              required
+            />
+          </div>
+        </div>
+      </div>
+
+      <div class="form-actions">
+        <div class="info-section">
+          <div class="rate-limit-info" @mouseenter="showRateLimit = true" @mouseleave="hideRateLimit">
+            <svg class="table-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z" fill="currentColor"/>
+            </svg>
+            <span class="rate-limit-text">Rate Limits</span>
+
+            <!-- 悬停显示的速率限制表格 -->
+            <div v-if="showRateLimit" class="rate-limit-tooltip" @mouseenter="clearHideTimeout" @mouseleave="hideRateLimit">
+              <h4>Gemini Model Rate Limits (AI Studio)</h4>
+              <table class="rate-limit-table">
+                <thead>
+                  <tr>
+                    <th>Model</th>
+                    <th>Requests/min</th>
+                    <th>Requests/day</th>
+                    <th>Tokens/min</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr>
+                    <td>gemini-2.5-pro</td>
+                    <td>5</td>
+                    <td>250,000</td>
+                    <td>100</td>
+                  </tr>
+                  <tr>
+                    <td>gemini-2.5-flash</td>
+                    <td>10</td>
+                    <td>250,000</td>
+                    <td>250</td>
+                  </tr>
+                  <tr class="highlight">
+                    <td>gemini-2.5-flash-lite-preview-06-17</td>
+                    <td>15</td>
+                    <td>250,000</td>
+                    <td>1,000</td>
+                  </tr>
+                  <tr>
+                    <td>gemini-2.0-flash</td>
+                    <td>15</td>
+                    <td>1,000,000</td>
+                    <td>200</td>
+                  </tr>
+                  <tr>
+                    <td>gemini-2.0-flash-lite</td>
+                    <td>30</td>
+                    <td>1,000,000</td>
+                    <td>200</td>
+                  </tr>
+                </tbody>
+              </table>
+              <div class="rate-limit-footer">
+                <a href="https://ai.google.dev/gemini-api/docs/rate-limits" target="_blank" rel="noopener noreferrer" class="rate-limit-link">
+                  📖 Official Rate Limits Documentation
+                </a>
+              </div>
+            </div>
+          </div>
+
+          <div class="gemini-balance-info">
+            <span class="balance-text">Rate limits too low?</span>
+            <a href="https://github.com/snailyp/gemini-balance" target="_blank" rel="noopener noreferrer" class="balance-link">
+              <span>Try gemini-balance</span>
+              <svg class="github-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
+                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+              </svg>
+            </a>
+          </div>
         </div>
 
-        <div class="form-group">
-          <label for="apiBase">API Base URL</label>
-          <input 
-            id="apiBase"
-            v-model="llmConfig.api_base" 
-            type="url"
-            placeholder="e.g., https://generativelanguage.googleapis.com/v1beta"
-            required
-          />
-        </div>
-
-        <div class="form-group">
-          <label for="model">Model</label>
-          <input 
-            id="model"
-            v-model="llmConfig.model" 
-            type="text"
-            placeholder="e.g., gemini-2.5-flash"
-            required
-          />
-        </div>
-
-        <div class="form-actions">
-          <button type="submit" :disabled="isSaving" class="save-btn">
-            {{ isSaving ? 'Saving...' : 'Save Settings' }}
-          </button>
-        </div>
-      </form>
+        <button type="button" @click="saveLlmConfig" :disabled="isSaving" class="save-btn">
+          {{ isSaving ? 'Saving...' : 'Save All Settings' }}
+        </button>
+      </div>
     </div>
 
     <div class="settings-section">
@@ -130,26 +264,47 @@ import { appDataDir } from '@tauri-apps/api/path';
 import { openPath, revealItemInDir } from '@tauri-apps/plugin-opener';
 
 const llmConfig = ref({
-  provider: "gemini",
-  api_key: "",
-  api_base: "https://generativelanguage.googleapis.com/v1beta",
-  model: "gemini-2.5-flash",
+  extraction_config: {
+    provider: "gemini",
+    api_key: "",
+    api_base: "https://generativelanguage.googleapis.com",
+    model: "gemini-2.5-flash-lite-preview-06-17",
+  },
+  analysis_config: {
+    provider: "gemini",
+    api_key: "",
+    api_base: "https://generativelanguage.googleapis.com",
+    model: "gemini-2.5-flash-lite-preview-06-17",
+  }
 });
 
 const isSaving = ref(false);
-const isTesting = ref(false);
+const isTestingExtraction = ref(false);
+const isTestingAnalysis = ref(false);
+const showRateLimit = ref(false);
+let hideTimeout: number | null = null;
 
 onMounted(async () => {
   await loadLlmConfig();
 });
 
-watch(() => llmConfig.value.provider, (newProvider) => {
+watch(() => llmConfig.value.extraction_config.provider, (newProvider) => {
   if (newProvider === 'gemini') {
-    llmConfig.value.api_base = 'https://generativelanguage.googleapis.com/v1beta';
-    llmConfig.value.model = 'gemini-2.5-flash';
+    llmConfig.value.extraction_config.api_base = 'https://generativelanguage.googleapis.com';
+    llmConfig.value.extraction_config.model = 'gemini-2.5-flash-lite-preview-06-17';
   } else if (newProvider === 'openai') {
-    llmConfig.value.api_base = 'https://api.openai.com/v1';
-    llmConfig.value.model = 'gpt-3.5-turbo';
+    llmConfig.value.extraction_config.api_base = 'https://api.openai.com/v1';
+    llmConfig.value.extraction_config.model = 'gpt-3.5-turbo';
+  }
+});
+
+watch(() => llmConfig.value.analysis_config.provider, (newProvider) => {
+  if (newProvider === 'gemini') {
+    llmConfig.value.analysis_config.api_base = 'https://generativelanguage.googleapis.com';
+    llmConfig.value.analysis_config.model = 'gemini-2.5-flash-lite-preview-06-17';
+  } else if (newProvider === 'openai') {
+    llmConfig.value.analysis_config.api_base = 'https://api.openai.com/v1';
+    llmConfig.value.analysis_config.model = 'gpt-3.5-turbo';
   }
 });
 
@@ -179,22 +334,57 @@ async function saveLlmConfig() {
   }
 }
 
-async function testApiConnection() {
-  if (!llmConfig.value.api_key.trim()) {
-    alert("Please enter an API key first");
+async function testExtractionConnection() {
+  if (!llmConfig.value.extraction_config.api_key.trim()) {
+    alert("Please enter an API key for extraction config first");
     return;
   }
 
-  isTesting.value = true;
+  isTestingExtraction.value = true;
   try {
-    const result = await invoke("test_connection", { config: llmConfig.value });
-    alert(`Connection successful: ${result}`);
+    const result = await invoke("test_extraction_connection", { config: llmConfig.value.extraction_config });
+    alert(`Extraction connection successful: ${result}`);
   } catch (error) {
-    console.error("API connection test failed:", error);
-    alert(`Connection failed: ${error}`);
+    console.error("Extraction API connection test failed:", error);
+    alert(`Extraction connection failed: ${error}`);
   } finally {
-    isTesting.value = false;
+    isTestingExtraction.value = false;
   }
+}
+
+async function testAnalysisConnection() {
+  if (!llmConfig.value.analysis_config.api_key.trim()) {
+    alert("Please enter an API key for analysis config first");
+    return;
+  }
+
+  isTestingAnalysis.value = true;
+  try {
+    const result = await invoke("test_analysis_connection", { config: llmConfig.value.analysis_config });
+    alert(`Analysis connection successful: ${result}`);
+  } catch (error) {
+    console.error("Analysis API connection test failed:", error);
+    alert(`Analysis connection failed: ${error}`);
+  } finally {
+    isTestingAnalysis.value = false;
+  }
+}
+
+function hideRateLimit() {
+  if (hideTimeout) {
+    clearTimeout(hideTimeout);
+  }
+  hideTimeout = setTimeout(() => {
+    showRateLimit.value = false;
+  }, 100); // 100ms延迟，给用户时间移动鼠标到浮窗
+}
+
+function clearHideTimeout() {
+  if (hideTimeout) {
+    clearTimeout(hideTimeout);
+    hideTimeout = null;
+  }
+  showRateLimit.value = true;
 }
 
 async function openConfigFolder() {
@@ -266,6 +456,28 @@ async function openConfigFolder() {
   font-size: 14px;
 }
 
+.ai-config-section {
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  padding: 20px;
+  margin-bottom: 20px;
+}
+
+.ai-config-section h3 {
+  margin: 0 0 8px 0;
+  font-size: 18px;
+  font-weight: 600;
+  color: #2d3748;
+}
+
+.config-description {
+  margin: 0 0 16px 0;
+  color: #718096;
+  font-size: 14px;
+  font-style: italic;
+}
+
 .settings-form {
   display: grid;
   gap: 20px;
@@ -335,8 +547,169 @@ async function openConfigFolder() {
 
 .form-actions {
   display: flex;
-  justify-content: flex-end;
-  margin-top: 8px;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 24px;
+  padding-top: 16px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.info-section {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+}
+
+.rate-limit-info {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+  color: #718096;
+  font-size: 12px;
+  transition: color 0.2s ease;
+}
+
+.rate-limit-info:hover {
+  color: #4a5568;
+}
+
+.table-icon {
+  width: 14px;
+  height: 14px;
+  color: #718096;
+}
+
+.rate-limit-text {
+  user-select: none;
+}
+
+.rate-limit-tooltip {
+  position: absolute;
+  bottom: 100%;
+  left: 0;
+  margin-bottom: 8px;
+  background: white;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.15);
+  padding: 16px;
+  z-index: 1000;
+  min-width: 500px;
+  animation: fadeIn 0.2s ease;
+}
+
+.rate-limit-tooltip h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a202c;
+}
+
+.rate-limit-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 12px;
+}
+
+.rate-limit-table th,
+.rate-limit-table td {
+  padding: 8px 12px;
+  text-align: left;
+  border-bottom: 1px solid #e2e8f0;
+}
+
+.rate-limit-table th {
+  background: #f8fafc;
+  font-weight: 600;
+  color: #4a5568;
+}
+
+.rate-limit-table tr.highlight {
+  background: #f0fff4;
+}
+
+.rate-limit-table tr.highlight td {
+  color: #22543d;
+  font-weight: 500;
+}
+
+.rate-limit-footer {
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid #e2e8f0;
+}
+
+.rate-limit-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #3182ce;
+  text-decoration: none;
+  font-size: 12px;
+  font-weight: 500;
+  transition: color 0.2s ease;
+}
+
+.rate-limit-link:hover {
+  color: #2c5aa0;
+  text-decoration: underline;
+}
+
+.gemini-balance-info {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #718096;
+}
+
+.balance-text {
+  user-select: none;
+}
+
+.balance-link {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  color: #1a202c;
+  text-decoration: none;
+  font-weight: 500;
+  transition: color 0.2s ease;
+  padding: 4px 8px;
+  border-radius: 4px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+}
+
+.balance-link:hover {
+  color: #2d3748;
+  background: #f1f5f9;
+  border-color: #cbd5e0;
+}
+
+.github-icon {
+  width: 14px;
+  height: 14px;
+  color: #1a202c;
+  flex-shrink: 0;
+  transition: color 0.2s ease;
+}
+
+.balance-link:hover .github-icon {
+  color: #2d3748;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(4px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .save-btn {
