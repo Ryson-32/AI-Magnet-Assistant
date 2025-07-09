@@ -28,17 +28,25 @@ pub trait SearchProvider: Send + Sync {
 /// clmclm.com 搜索引擎实现
 pub struct ClmclmProvider {
     client: reqwest::Client,
+    pub base_url: String,
 }
 
 impl ClmclmProvider {
-    pub fn new() -> Self {
+    pub fn with_base_url(base_url: &str) -> Self {
         let client = reqwest::Client::builder()
             .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
             .timeout(std::time::Duration::from_secs(30))
             .build()
             .expect("Failed to create HTTP client");
 
-        Self { client }
+        Self {
+            client,
+            base_url: base_url.trim_end_matches('/').to_string(),
+        }
+    }
+
+    pub fn new() -> Self {
+        Self::with_base_url("http://clmclm.com")
     }
 }
 
@@ -49,7 +57,7 @@ impl SearchProvider for ClmclmProvider {
     }
 
     async fn search(&self, query: &str, page: u32) -> Result<Vec<SearchResult>> {
-        let url = format!("http://clmclm.com/search-{}-1-1-{}.html", query, page);
+        let url = format!("{}/search-{}-1-1-{}.html", self.base_url, query, page);
         println!("🔍 Searching: {}", url);
 
         let response = self.client
@@ -95,7 +103,7 @@ impl ClmclmProvider {
 
             if let (Some(title_node), Some(magnet_node)) = (title_element, magnet_element) {
                 let title = title_node.text().collect::<String>().trim().to_string();
-                let source_url = title_node.value().attr("href").map(|s| format!("http://clmclm.com{}", s));
+                let source_url = title_node.value().attr("href").map(|s| format!("{}{}", self.base_url, s));
 
                 if let Some(magnet_link) = magnet_node.value().attr("href") {
                     // 尝试从所有span中找到文件大小
@@ -852,9 +860,9 @@ pub fn create_ai_enhanced_search_core(
 /// 向后兼容的搜索函数（主要用于测试）
 #[allow(dead_code)]
 pub async fn search(query: &str, base_url: Option<&str>) -> Result<Vec<SearchResult>> {
-    if base_url.is_some() {
+    if let Some(base_url) = base_url {
         // 如果指定了base_url，使用旧的实现逻辑（主要用于测试）
-        let provider = ClmclmProvider::new();
+        let provider = ClmclmProvider::with_base_url(base_url);
         provider.search(query, 1).await
     } else {
         // 使用AI增强的搜索核心，但不包含AI配置（用于基础测试）
@@ -939,8 +947,7 @@ mod tests {
         });
 
         // Perform the search
-        let base_url = server.base_url();
-        let results = search("empty", Some(&base_url)).await.unwrap();
+        let results = search("empty", Some(&server.base_url())).await.unwrap();
 
         // Assert
         mock.assert();
