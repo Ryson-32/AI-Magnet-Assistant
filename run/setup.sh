@@ -9,7 +9,7 @@ if [[ "$(uname)" == "Linux" ]]; then
     # 假设是 Debian/Ubuntu-based 系统
     # 使用 sudo 需要管理员权限
     sudo apt-get update && sudo apt-get install -y \
-        libwebkit2gtk-4.0-dev \
+        libwebkit2gtk-4.1-dev \
         build-essential \
         curl \
         wget \
