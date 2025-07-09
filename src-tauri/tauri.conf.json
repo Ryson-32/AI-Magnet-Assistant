@@ -4,7 +4,7 @@
   "version": "1.1.0",
   "identifier": "com.ai-magnet-assistant.app",
   "build": {
-    "beforeDevCommand": "npm run dev",
+    "beforeDevCommand": "npm run vite:dev",
     "devUrl": "http://localhost:1423",
     "beforeBuildCommand": "npm run build",
     "frontendDist": "../dist"
