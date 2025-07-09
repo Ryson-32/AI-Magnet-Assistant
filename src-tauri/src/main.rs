@@ -6,10 +6,102 @@ use crate::llm_service::LlmClient;
 // 引入需要的模块
 mod searcher;
 mod app_state;
-mod filter;
 
 use tauri::Manager;
 use regex::Regex;
+use searcher::SearchCore;
+
+// ============ 辅助函数 ============
+
+/// 从 AppState 构建 LLM 配置
+fn build_llm_configs(app_state: &app_state::AppState) -> (Option<llm_service::LlmConfig>, Option<llm_service::LlmConfig>) {
+    let llm_config = app_state::get_llm_config(app_state);
+
+    let extraction_config = if !llm_config.extraction_config.api_key.is_empty() {
+        Some(llm_service::LlmConfig {
+            provider: llm_config.extraction_config.provider.clone(),
+            api_key: llm_config.extraction_config.api_key.clone(),
+            api_base: llm_config.extraction_config.api_base.clone(),
+            model: llm_config.extraction_config.model.clone(),
+            batch_size: llm_config.extraction_config.batch_size,
+        })
+    } else {
+        None
+    };
+
+    let analysis_config = if !llm_config.analysis_config.api_key.is_empty() {
+        Some(llm_service::LlmConfig {
+            provider: llm_config.analysis_config.provider.clone(),
+            api_key: llm_config.analysis_config.api_key.clone(),
+            api_base: llm_config.analysis_config.api_base.clone(),
+            model: llm_config.analysis_config.model.clone(),
+            batch_size: llm_config.analysis_config.batch_size,
+        })
+    } else {
+        None
+    };
+
+    (extraction_config, analysis_config)
+}
+
+/// 从 AppState 获取启用的搜索引擎
+fn get_active_engines(app_state: &app_state::AppState) -> Vec<app_state::SearchEngine> {
+    app_state::get_all_engines(app_state)
+        .into_iter()
+        .filter(|e| e.is_enabled)
+        .collect()
+}
+
+/// 从 AppState 获取优先关键词
+fn get_priority_keywords(app_state: &app_state::AppState) -> Vec<String> {
+    app_state::get_all_priority_keywords(app_state)
+        .iter()
+        .map(|pk| pk.keyword.clone())
+        .collect()
+}
+
+/// 创建 SearchCore 实例
+fn create_search_core(
+    state: &app_state::AppState,
+    include_clmclm: bool,
+    include_others: bool,
+) -> Result<SearchCore, String> {
+    let (extraction_config, analysis_config) = build_llm_configs(state);
+    let priority_keyword_strings = get_priority_keywords(state);
+    let enabled_engines = get_active_engines(state);
+
+    let clmclm_is_enabled_in_settings = enabled_engines.iter().any(|e| e.name == "clmclm.com");
+
+    let custom_engine_tuples: Vec<(String, String)> = if include_others {
+        enabled_engines
+            .iter()
+            .filter(|e| e.name != "clmclm.com")
+            .map(|e| (e.name.clone(), e.url_template.clone()))
+            .collect()
+    } else {
+        Vec::new()
+    };
+
+    let final_clmclm_status = include_clmclm && clmclm_is_enabled_in_settings;
+
+    if custom_engine_tuples.is_empty() && !final_clmclm_status {
+        return Err("No search engines available for this operation.".to_string());
+    }
+
+    println!(
+        "🔧 Creating search core: Custom Engines: {}, CLMCLM: {}",
+        custom_engine_tuples.len(),
+        final_clmclm_status
+    );
+
+    Ok(searcher::create_ai_enhanced_search_core(
+        extraction_config,
+        analysis_config,
+        priority_keyword_strings,
+        custom_engine_tuples,
+        final_clmclm_status,
+    ))
+}
 
 // ============ AI分析命令 ============
 
@@ -117,74 +209,7 @@ async fn search_multi_page(
     max_pages: Option<u32>,
 ) -> Result<Vec<searcher::SearchResult>, String> {
     let pages = max_pages.unwrap_or(3);
-
-    // 获取启用的搜索引擎
-    let engines = app_state::get_all_engines(&state);
-    let enabled_engines: Vec<_> = engines.into_iter().filter(|e| e.is_enabled).collect();
-
-    if enabled_engines.is_empty() {
-        return Err("No enabled search engines found. Please enable at least one search engine in Settings.".to_string());
-    }
-
-    // 获取优先关键词
-    let priority_keywords = app_state::get_all_priority_keywords(&state);
-    let priority_keyword_strings: Vec<String> = priority_keywords.iter()
-        .map(|pk| pk.keyword.clone())
-        .collect();
-
-    // 获取LLM配置
-    let llm_config = app_state::get_llm_config(&state);
-
-    // 转换为Option<LlmConfig>格式
-    let extraction_config = if !llm_config.extraction_config.api_key.is_empty() {
-        Some(llm_service::LlmConfig {
-            provider: llm_config.extraction_config.provider.clone(),
-            api_key: llm_config.extraction_config.api_key.clone(),
-            api_base: llm_config.extraction_config.api_base.clone(),
-            model: llm_config.extraction_config.model.clone(),
-            batch_size: llm_config.extraction_config.batch_size,
-        })
-    } else {
-        None
-    };
-
-    let analysis_config = if !llm_config.analysis_config.api_key.is_empty() {
-        Some(llm_service::LlmConfig {
-            provider: llm_config.analysis_config.provider.clone(),
-            api_key: llm_config.analysis_config.api_key.clone(),
-            api_base: llm_config.analysis_config.api_base.clone(),
-            model: llm_config.analysis_config.model.clone(),
-            batch_size: llm_config.analysis_config.batch_size,
-        })
-    } else {
-        None
-    };
-
-    // 分离clmclm和其他搜索引擎
-    let clmclm_enabled = enabled_engines.iter().any(|e| e.name == "clmclm.com");
-    let custom_engines: Vec<_> = enabled_engines.into_iter()
-        .filter(|e| e.name != "clmclm.com")
-        .collect();
-
-    // 转换custom_engines为(String, String)格式
-    let custom_engine_tuples: Vec<(String, String)> = custom_engines.iter()
-        .map(|e| (e.name.clone(), e.url_template.clone()))
-        .collect();
-
-    // 创建搜索核心，只包含启用的搜索引擎
-    let search_core = if !custom_engine_tuples.is_empty() || clmclm_enabled {
-        println!("🔧 Creating search core: {} custom engines, clmclm.com: {}", custom_engine_tuples.len(), clmclm_enabled);
-        searcher::create_ai_enhanced_search_core(
-            extraction_config,
-            analysis_config,
-            priority_keyword_strings,
-            custom_engine_tuples,
-            clmclm_enabled
-        )
-    } else {
-        return Err("No enabled search engines found. Please enable at least one search engine.".to_string());
-    };
-
+    let search_core = create_search_core(&state, true, true)?;
     search_core.search_multi_page(keyword.as_str(), pages).await.map_err(|e| e.to_string())
 }
 
@@ -195,60 +220,10 @@ async fn search_clmclm_first(
     max_pages: Option<u32>,
 ) -> Result<Vec<searcher::SearchResult>, String> {
     let pages = max_pages.unwrap_or(3);
-
-    // 获取启用的搜索引擎
-    let engines = app_state::get_all_engines(&state);
-    let clmclm_enabled = engines.iter().any(|e| e.name == "clmclm.com" && e.is_enabled);
-
-    if !clmclm_enabled {
-        return Ok(Vec::new());
+    match create_search_core(&state, true, false) {
+        Ok(search_core) => search_core.search_multi_page(keyword.as_str(), pages).await.map_err(|e| e.to_string()),
+        Err(_) => Ok(Vec::new()), // 如果clmclm未启用，则返回空结果
     }
-
-    // 获取优先关键词
-    let priority_keywords = app_state::get_all_priority_keywords(&state);
-    let priority_keyword_strings: Vec<String> = priority_keywords.iter()
-        .map(|pk| pk.keyword.clone())
-        .collect();
-
-    // 获取LLM配置
-    let llm_config = app_state::get_llm_config(&state);
-
-    // 转换为Option<LlmConfig>格式
-    let extraction_config = if !llm_config.extraction_config.api_key.is_empty() {
-        Some(llm_service::LlmConfig {
-            provider: llm_config.extraction_config.provider.clone(),
-            api_key: llm_config.extraction_config.api_key.clone(),
-            api_base: llm_config.extraction_config.api_base.clone(),
-            model: llm_config.extraction_config.model.clone(),
-            batch_size: llm_config.extraction_config.batch_size,
-        })
-    } else {
-        None
-    };
-
-    let analysis_config = if !llm_config.analysis_config.api_key.is_empty() {
-        Some(llm_service::LlmConfig {
-            provider: llm_config.analysis_config.provider.clone(),
-            api_key: llm_config.analysis_config.api_key.clone(),
-            api_base: llm_config.analysis_config.api_base.clone(),
-            model: llm_config.analysis_config.model.clone(),
-            batch_size: llm_config.analysis_config.batch_size,
-        })
-    } else {
-        None
-    };
-
-    // 只创建clmclm搜索核心
-    println!("🔧 Creating clmclm-only search core");
-    let search_core = searcher::create_ai_enhanced_search_core(
-        extraction_config,
-        analysis_config,
-        priority_keyword_strings,
-        Vec::new(), // 没有自定义引擎
-        true // 只启用clmclm
-    );
-
-    search_core.search_multi_page(keyword.as_str(), pages).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -258,67 +233,10 @@ async fn search_other_engines(
     max_pages: Option<u32>,
 ) -> Result<Vec<searcher::SearchResult>, String> {
     let pages = max_pages.unwrap_or(3);
-
-    // 获取启用的搜索引擎（除了clmclm）
-    let engines = app_state::get_all_engines(&state);
-    let custom_engines: Vec<_> = engines.into_iter()
-        .filter(|e| e.is_enabled && e.name != "clmclm.com")
-        .collect();
-
-    if custom_engines.is_empty() {
-        return Ok(Vec::new());
+    match create_search_core(&state, false, true) {
+        Ok(search_core) => search_core.search_multi_page(keyword.as_str(), pages).await.map_err(|e| e.to_string()),
+        Err(_) => Ok(Vec::new()), // 如果没有其他引擎，则返回空结果
     }
-
-    // 获取优先关键词
-    let priority_keywords = app_state::get_all_priority_keywords(&state);
-    let priority_keyword_strings: Vec<String> = priority_keywords.iter()
-        .map(|pk| pk.keyword.clone())
-        .collect();
-
-    // 获取LLM配置
-    let llm_config = app_state::get_llm_config(&state);
-
-    // 转换为Option<LlmConfig>格式
-    let extraction_config = if !llm_config.extraction_config.api_key.is_empty() {
-        Some(llm_service::LlmConfig {
-            provider: llm_config.extraction_config.provider.clone(),
-            api_key: llm_config.extraction_config.api_key.clone(),
-            api_base: llm_config.extraction_config.api_base.clone(),
-            model: llm_config.extraction_config.model.clone(),
-            batch_size: llm_config.extraction_config.batch_size,
-        })
-    } else {
-        None
-    };
-
-    let analysis_config = if !llm_config.analysis_config.api_key.is_empty() {
-        Some(llm_service::LlmConfig {
-            provider: llm_config.analysis_config.provider.clone(),
-            api_key: llm_config.analysis_config.api_key.clone(),
-            api_base: llm_config.analysis_config.api_base.clone(),
-            model: llm_config.analysis_config.model.clone(),
-            batch_size: llm_config.analysis_config.batch_size,
-        })
-    } else {
-        None
-    };
-
-    // 转换custom_engines为(String, String)格式
-    let custom_engine_tuples: Vec<(String, String)> = custom_engines.iter()
-        .map(|e| (e.name.clone(), e.url_template.clone()))
-        .collect();
-
-    // 只创建其他引擎的搜索核心
-    println!("🔧 Creating other-engines search core: {} engines", custom_engine_tuples.len());
-    let search_core = searcher::create_ai_enhanced_search_core(
-        extraction_config,
-        analysis_config,
-        priority_keyword_strings,
-        custom_engine_tuples,
-        false // 不启用clmclm
-    );
-
-    search_core.search_multi_page(keyword.as_str(), pages).await.map_err(|e| e.to_string())
 }
 
 
