@@ -5,7 +5,8 @@
   "type": "module",
   "description": "AI Magnet Assistant - Intelligent Magnet Link Search and Optimization Tool",
   "scripts": {
-    "dev": "vite",
+    "dev": "tauri dev",
+    "vite:dev": "vite",
     "build": "vue-tsc --noEmit && vite build",
     "preview": "vite preview",
     "tauri": "tauri"
