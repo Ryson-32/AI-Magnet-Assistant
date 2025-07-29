@@ -29,7 +29,7 @@
 1.  Clone the repository:
     ```bash
     git clone https://github.com/Ryson-32/AI-Magnet-Assistant.git
-    cd ai-magnet-assistant
+    cd AI-Magnet-Assistant
     ```
 
 2.  Install the dependencies:
