@@ -29,7 +29,7 @@
 1.  克隆代码仓库：
     ```bash
     git clone https://github.com/Ryson-32/AI-Magnet-Assistant.git
-    cd ai-magnet-assistant
+    cd AI-Magnet-Assistant
     ```
 
 2.  安装依赖：
