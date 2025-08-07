@@ -105,8 +105,12 @@ fn create_search_core(
 
 // ============ AI分析命令 ============
 
-/// 使用正则表达式作为后备方案清理标题
-fn clean_title_fallback(title: &str) -> String {
+/// 统一的标题清理函数
+fn clean_title_unified(title: &str) -> String {
+    if title.trim().is_empty() {
+        return "Unknown".to_string();
+    }
+
     // 移除常见的广告标记，如 [y5y4.com] 或 【...】
     let re_brackets = Regex::new(r"\[.*?\]|【.*?】").unwrap();
     let title = re_brackets.replace_all(title, "");
@@ -116,7 +120,34 @@ fn clean_title_fallback(title: &str) -> String {
     let title = re_urls.replace_all(&title, "");
 
     // 清理多余的空格
-    title.trim().replace("  ", " ")
+    let cleaned = title.trim().replace("  ", " ");
+
+    if cleaned.is_empty() {
+        "Unknown".to_string()
+    } else {
+        cleaned
+    }
+}
+
+/// 创建DetailedAnalysisResult的辅助函数
+fn create_analysis_result(
+    original_result: &searcher::SearchResult,
+    cleaned_title: Option<String>,
+    purity_score: u8,
+    tags: Vec<String>,
+    error: Option<String>,
+) -> llm_service::DetailedAnalysisResult {
+    let final_title = cleaned_title.unwrap_or_else(|| clean_title_unified(&original_result.title));
+
+    llm_service::DetailedAnalysisResult {
+        title: final_title,
+        purity_score,
+        tags,
+        magnet_link: original_result.magnet_link.clone(),
+        file_size: original_result.file_size.clone(),
+        file_list: original_result.file_list.clone(),
+        error,
+    }
 }
 
 
@@ -133,7 +164,7 @@ async fn analyze_resource(
             println!("[AI] Analyzed: '{}' -> '{}'", result.title, cleaned_title);
 
             let final_title = if cleaned_title.is_empty() {
-                clean_title_fallback(&result.title)
+                clean_title_unified(&result.title)
             } else {
                 cleaned_title
             };
@@ -450,19 +481,19 @@ async fn batch_analyze_resources(
                 // 将批量结果转换为 DetailedAnalysisResult
                 for (i, analysis_result) in batch_results.iter().enumerate() {
                     if let Some(original_result) = results.get(batch_index * batch_size + i) {
-                        all_results.push(llm_service::DetailedAnalysisResult {
-                            title: if analysis_result.cleaned_title.is_empty() {
-                                clean_title_fallback(&original_result.title)
-                            } else {
-                                analysis_result.cleaned_title.clone()
-                            },
-                            purity_score: analysis_result.purity_score,
-                            tags: analysis_result.tags.clone(),
-                            magnet_link: original_result.magnet_link.clone(),
-                            file_size: original_result.file_size.clone(),
-                            file_list: original_result.file_list.clone(),
-                            error: None,
-                        });
+                        let cleaned_title = if analysis_result.cleaned_title.is_empty() {
+                            None
+                        } else {
+                            Some(analysis_result.cleaned_title.clone())
+                        };
+
+                        all_results.push(create_analysis_result(
+                            original_result,
+                            cleaned_title,
+                            analysis_result.purity_score,
+                            analysis_result.tags.clone(),
+                            None,
+                        ));
                     }
                 }
                 println!("✅ Frontend batch {} success.", batch_index + 1);
@@ -475,15 +506,13 @@ async fn batch_analyze_resources(
                 if failed_batches >= MAX_FAILED_BATCHES {
                     for (i, _item) in chunk.iter().enumerate() {
                         if let Some(original_result) = results.get(batch_index * batch_size + i) {
-                            all_results.push(llm_service::DetailedAnalysisResult {
-                                title: clean_title_fallback(&original_result.title),
-                                purity_score: 50, // 默认分数
-                                tags: vec!["Analysis Failed - Too Many Failures".to_string()],
-                                magnet_link: original_result.magnet_link.clone(),
-                                file_size: original_result.file_size.clone(),
-                                file_list: original_result.file_list.clone(),
-                                error: Some("Too many batch failures, analysis aborted".to_string()),
-                            });
+                            all_results.push(create_analysis_result(
+                                original_result,
+                                None,
+                                50, // 默认分数
+                                vec!["Analysis Failed - Too Many Failures".to_string()],
+                                Some("Too many batch failures, analysis aborted".to_string()),
+                            ));
                         }
                     }
                     continue;
@@ -502,55 +531,49 @@ async fn batch_analyze_resources(
                         ).await {
                             Ok(Ok(mut batch_results)) => {
                                 if let Some(result) = batch_results.pop() {
-                                    all_results.push(llm_service::DetailedAnalysisResult {
-                                        title: if result.cleaned_title.is_empty() {
-                                            clean_title_fallback(&original_result.title)
-                                        } else {
-                                            result.cleaned_title
-                                        },
-                                        purity_score: result.purity_score,
-                                        tags: result.tags,
-                                        magnet_link: original_result.magnet_link.clone(),
-                                        file_size: original_result.file_size.clone(),
-                                        file_list: original_result.file_list.clone(),
-                                        error: None,
-                                    });
+                                    let cleaned_title = if result.cleaned_title.is_empty() {
+                                        None
+                                    } else {
+                                        Some(result.cleaned_title)
+                                    };
+
+                                    all_results.push(create_analysis_result(
+                                        original_result,
+                                        cleaned_title,
+                                        result.purity_score,
+                                        result.tags,
+                                        None,
+                                    ));
                                 } else {
                                     println!("⚠️ Individual analysis for '{}' returned no results", item.title);
-                                    all_results.push(llm_service::DetailedAnalysisResult {
-                                        title: clean_title_fallback(&original_result.title),
-                                        purity_score: 50,
-                                        tags: vec!["No Results".to_string()],
-                                        magnet_link: original_result.magnet_link.clone(),
-                                        file_size: original_result.file_size.clone(),
-                                        file_list: original_result.file_list.clone(),
-                                        error: Some("Individual analysis returned no results".to_string()),
-                                    });
+                                    all_results.push(create_analysis_result(
+                                        original_result,
+                                        None,
+                                        50,
+                                        vec!["No Results".to_string()],
+                                        Some("Individual analysis returned no results".to_string()),
+                                    ));
                                 }
                             }
                             Ok(Err(individual_error)) => {
                                 println!("⚠️ Individual analysis for '{}' failed: {}", item.title, individual_error);
-                                all_results.push(llm_service::DetailedAnalysisResult {
-                                    title: clean_title_fallback(&original_result.title),
-                                    purity_score: 50,
-                                    tags: vec!["Individual Analysis Failed".to_string()],
-                                    magnet_link: original_result.magnet_link.clone(),
-                                    file_size: original_result.file_size.clone(),
-                                    file_list: original_result.file_list.clone(),
-                                    error: Some(format!("Individual analysis failed: {}", individual_error)),
-                                });
+                                all_results.push(create_analysis_result(
+                                    original_result,
+                                    None,
+                                    50,
+                                    vec!["Individual Analysis Failed".to_string()],
+                                    Some(format!("Individual analysis failed: {}", individual_error)),
+                                ));
                             }
                             Err(_timeout) => {
                                 println!("⚠️ Individual analysis for '{}' timed out", item.title);
-                                all_results.push(llm_service::DetailedAnalysisResult {
-                                    title: clean_title_fallback(&original_result.title),
-                                    purity_score: 50,
-                                    tags: vec!["Analysis Timeout".to_string()],
-                                    magnet_link: original_result.magnet_link.clone(),
-                                    file_size: original_result.file_size.clone(),
-                                    file_list: original_result.file_list.clone(),
-                                    error: Some("Analysis timed out after 30 seconds".to_string()),
-                                });
+                                all_results.push(create_analysis_result(
+                                    original_result,
+                                    None,
+                                    50,
+                                    vec!["Analysis Timeout".to_string()],
+                                    Some("Analysis timed out after 30 seconds".to_string()),
+                                ));
                             }
                         }
                     }

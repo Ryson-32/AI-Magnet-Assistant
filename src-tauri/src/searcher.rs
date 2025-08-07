@@ -5,6 +5,34 @@ use futures::future::join_all;
 use std::sync::Arc;
 use crate::llm_service::{LlmClient, GeminiClient, LlmConfig};
 
+// 统一的日志宏
+macro_rules! search_log {
+    (info, $($arg:tt)*) => {
+        println!("🔍 {}", format!($($arg)*))
+    };
+    (success, $($arg:tt)*) => {
+        println!("✅ {}", format!($($arg)*))
+    };
+    (warn, $($arg:tt)*) => {
+        println!("⚠️ {}", format!($($arg)*))
+    };
+    (error, $($arg:tt)*) => {
+        println!("❌ {}", format!($($arg)*))
+    };
+    (ai, $($arg:tt)*) => {
+        println!("🤖 {}", format!($($arg)*))
+    };
+    (stats, $($arg:tt)*) => {
+        println!("📊 {}", format!($($arg)*))
+    };
+}
+
+// 统一的错误处理
+fn handle_request_error(url: &str, error: reqwest::Error) -> anyhow::Error {
+    search_log!(error, "Request failed for {}: {}", url, error);
+    anyhow!("Request failed: {}", error)
+}
+
 /// 安全截断字符串，避免切到多字节字符中间
 fn safe_truncate(s: &str, max_bytes: usize) -> &str {
     if s.len() <= max_bytes {
@@ -91,26 +119,22 @@ impl SearchProvider for ClmclmProvider {
 
     async fn search(&self, query: &str, page: u32) -> Result<Vec<SearchResult>> {
         let url = format!("{}/search-{}-1-1-{}.html", self.base_url, query, page);
-        println!("🔍 Searching: {}", url);
+        search_log!(info, "Searching: {}", url);
 
         let response = self.client
             .get(&url)
             .send()
             .await
-            .map_err(|e| {
-                println!("❌ Network error: {}", e);
-                anyhow!("Failed to fetch {}: {}", url, e)
-            })?;
+            .map_err(|e| handle_request_error(&url, e))?;
 
         if !response.status().is_success() {
-            println!("❌ HTTP error: {} for {}", response.status(), url);
+            search_log!(error, "HTTP error {} for {}", response.status(), url);
             return Err(anyhow!("HTTP error {}: {}", response.status(), url));
         }
 
         let html = response.text().await?;
-        println!("✅ Response received, parsing...");
         let results = self.parse_results(&html)?;
-        println!("📊 Found {} results on page {}.", results.len(), page);
+        search_log!(stats, "Found {} results on page {}", results.len(), page);
         Ok(results)
     }
 }
@@ -282,7 +306,7 @@ impl SearchProvider for GenericProvider {
             url = url.replace("{page}", &page.to_string());
         }
 
-        println!("🔍 Searching: {}", url);
+        search_log!(info, "Searching: {}", url);
 
         let response = self.client
             .get(&url)
@@ -302,13 +326,10 @@ impl SearchProvider for GenericProvider {
             .header("Referer", "https://www.google.com/")
             .send()
             .await
-            .map_err(|e| {
-                println!("❌ Request failed for {}: {}", url, e);
-                anyhow!("Request failed: {}", e)
-            })?;
+            .map_err(|e| handle_request_error(&url, e))?;
 
         if !response.status().is_success() {
-            println!("❌ HTTP error {} for {}", response.status(), url);
+            search_log!(error, "HTTP error {} for {}", response.status(), url);
             return Err(anyhow!("HTTP error: {}", response.status()));
         }
 
@@ -322,18 +343,18 @@ impl SearchProvider for GenericProvider {
                            html.contains("self.webpackChunk");
 
         if is_javascript {
-            println!("⚠️ 网站返回JavaScript代码，可能是SPA或有反爬虫机制，跳过处理");
+            search_log!(warn, "网站返回JavaScript代码，可能是SPA或有反爬虫机制，跳过处理");
             return Ok(Vec::new());
         }
 
         if html.contains('�') {
-            println!("⚠️ HTML包含乱码字符，可能存在编码问题");
+            search_log!(warn, "HTML包含乱码字符，可能存在编码问题");
         }
 
         // 只在出现问题时显示HTML预览
         if html.contains('�') || is_javascript {
             let preview = safe_truncate(&html, 500);
-            println!("🔍 HTML preview (前500字符，用于诊断):");
+            search_log!(info, "HTML preview (前500字符，用于诊断):");
             println!("---START---");
             println!("{}", preview);
             println!("---END---");
@@ -344,7 +365,7 @@ impl SearchProvider for GenericProvider {
         if magnet_count == 0 {
             let error_count = html.matches("404").count() + html.matches("Not Found").count();
             if error_count > 0 {
-                println!("⚠️ 可能收到了错误页面，包含 {} 个错误指示符", error_count);
+                search_log!(warn, "可能收到了错误页面，包含 {} 个错误指示符", error_count);
             }
         }
 
@@ -355,7 +376,7 @@ impl SearchProvider for GenericProvider {
             self.parse_generic_results(&html)?
         };
 
-        println!("📊 Found {} results on page {}.", results.len(), page);
+        search_log!(stats, "Found {} results on page {}", results.len(), page);
         Ok(results)
     }
 }
@@ -363,22 +384,21 @@ impl SearchProvider for GenericProvider {
 impl GenericProvider {
     /// 使用AI分析整个HTML内容
     async fn analyze_html_with_ai(&self, html: &str, llm_client: Arc<dyn LlmClient>) -> Result<Vec<SearchResult>> {
-        println!("🧠 AI Phase 1: Extracting basic info from HTML...");
+        search_log!(ai, "Phase 1: Extracting basic info from HTML...");
 
         // 第一阶段：让AI从HTML中提取所有磁力链接和基础信息
         match self.extract_torrents_from_html_with_ai(html, llm_client.clone()).await {
             Ok(results) => {
                 if results.is_empty() {
-                    println!("⚠️ AI extraction found no results. Falling back to basic parsing.");
+                    search_log!(warn, "AI extraction found no results. Falling back to basic parsing");
                     return self.parse_generic_results(html);
                 }
 
-                println!("🎯 AI Phase 2: Separating priority results...");
+                search_log!(ai, "Phase 2: Separating priority results...");
                 let (priority_results, regular_results) = self.separate_priority_results(results);
 
-                println!("✅ AI extraction completed: {} priority and {} regular results.",
+                search_log!(success, "AI extraction completed: {} priority and {} regular results",
                          priority_results.len(), regular_results.len());
-                println!("📱 Results will be displayed immediately. Analysis will be handled by frontend.");
 
                 // 合并结果：优先结果在前，普通结果在后
                 let mut final_results = priority_results;
@@ -386,7 +406,7 @@ impl GenericProvider {
                 Ok(final_results)
             }
             Err(e) => {
-                println!("⚠️ AI HTML analysis failed: {}, falling back to basic parsing", e);
+                search_log!(warn, "AI HTML analysis failed: {}, falling back to basic parsing", e);
                 self.parse_generic_results(html)
             }
         }
@@ -396,7 +416,7 @@ impl GenericProvider {
     async fn extract_torrents_from_html_with_ai(&self, html: &str, llm_client: Arc<dyn LlmClient>) -> Result<Vec<SearchResult>> {
         // 限制HTML长度以避免超出AI token限制 (250k tokens模型，使用80k字符约120k tokens)
         let truncated_html = if html.len() > 80000 {
-            println!("📏 HTML too long ({} chars), truncating to 80k chars.", html.len());
+            search_log!(info, "HTML too long ({} chars), truncating to 80k chars", html.len());
             safe_truncate(html, 80000)
         } else {
             html
@@ -423,9 +443,9 @@ impl GenericProvider {
                 self.parse_ai_html_response_from_batch(batch_result)
             }
             Err(e) => {
-                println!("❌ AI HTML分析失败: {}", e);
-                println!("🤖 发送给AI的HTML长度: {} 字符", html_content.len());
-                println!("🤖 HTML前500字符预览: {}", safe_truncate(html_content, 500));
+                search_log!(error, "AI HTML分析失败: {}", e);
+                search_log!(ai, "发送给AI的HTML长度: {} 字符", html_content.len());
+                search_log!(ai, "HTML前500字符预览: {}", safe_truncate(html_content, 500));
                 Err(anyhow!("AI HTML analysis failed: {}", e))
             }
         }
@@ -951,25 +971,7 @@ pub fn create_ai_enhanced_search_core(
     SearchCore { providers }
 }
 
-/// 向后兼容的搜索函数（主要用于测试）
-#[allow(dead_code)]
-pub async fn search(query: &str, base_url: Option<&str>) -> Result<Vec<SearchResult>> {
-    if let Some(base_url) = base_url {
-        // 如果指定了base_url，使用旧的实现逻辑（主要用于测试）
-        let provider = ClmclmProvider::with_base_url(base_url);
-        provider.search(query, 1).await
-    } else {
-        // 使用AI增强的搜索核心，但不包含AI配置（用于基础测试）
-        let search_core = create_ai_enhanced_search_core(
-            None, // 无提取配置
-            None, // 无分析配置
-            Vec::new(), // 无优先关键词
-            Vec::new(), // 无自定义引擎
-            true // 包含clmclm.com
-        );
-        search_core.search(query).await
-    }
-}
+
 
 #[cfg(test)]
 mod tests {
@@ -1008,7 +1010,8 @@ mod tests {
         });
 
         // Perform the search against the mock server
-        let results = search("test", Some(&server.base_url())).await.unwrap();
+        let provider = ClmclmProvider::with_base_url(&server.base_url());
+        let results = provider.search("test", 1).await.unwrap();
 
         // Assert
         mock.assert();
@@ -1041,7 +1044,8 @@ mod tests {
         });
 
         // Perform the search
-        let results = search("empty", Some(&server.base_url())).await.unwrap();
+        let provider = ClmclmProvider::with_base_url(&server.base_url());
+        let results = provider.search("empty", 1).await.unwrap();
 
         // Assert
         mock.assert();

@@ -436,31 +436,7 @@ pub fn update_llm_config(state: &AppState, config: LlmConfig) -> Result<()> {
     Ok(())
 }
 
-/// 获取提取配置（第一次API调用）
-pub fn get_extraction_config(state: &AppState) -> SingleLlmConfig {
-    let data = state.lock().unwrap();
-    data.llm_config.extraction_config.clone()
-}
 
-/// 获取分析配置（第二次API调用）
-pub fn get_analysis_config(state: &AppState) -> SingleLlmConfig {
-    let data = state.lock().unwrap();
-    data.llm_config.analysis_config.clone()
-}
-
-/// 更新提取配置
-pub fn update_extraction_config(state: &AppState, config: SingleLlmConfig) -> Result<()> {
-    let mut data = state.lock().unwrap();
-    data.llm_config.extraction_config = config;
-    Ok(())
-}
-
-/// 更新分析配置
-pub fn update_analysis_config(state: &AppState, config: SingleLlmConfig) -> Result<()> {
-    let mut data = state.lock().unwrap();
-    data.llm_config.analysis_config = config;
-    Ok(())
-}
 
 // ============ 搜索设置相关函数 ============
 
