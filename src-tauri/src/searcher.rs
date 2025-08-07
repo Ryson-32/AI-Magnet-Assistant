@@ -5,6 +5,39 @@ use futures::future::join_all;
 use std::sync::Arc;
 use crate::llm_service::{LlmClient, GeminiClient, LlmConfig};
 
+/// 安全截断字符串，避免切到多字节字符中间
+fn safe_truncate(s: &str, max_bytes: usize) -> &str {
+    if s.len() <= max_bytes {
+        return s;
+    }
+
+    // 找到不超过max_bytes的最大字符边界
+    let mut end = max_bytes;
+    while end > 0 && !s.is_char_boundary(end) {
+        end -= 1;
+    }
+    &s[..end]
+}
+
+/// 清理HTML标签和实体
+fn clean_html_text(text: &str) -> String {
+    // 移除HTML标签
+    let re_tags = regex::Regex::new(r"<[^>]*>").unwrap();
+    let text = re_tags.replace_all(text, "");
+
+    // 解码常见的HTML实体
+    let text = text
+        .replace("&amp;", "&")
+        .replace("&lt;", "<")
+        .replace("&gt;", ">")
+        .replace("&quot;", "\"")
+        .replace("&#39;", "'")
+        .replace("&nbsp;", " ");
+
+    // 清理多余的空格
+    text.trim().replace("  ", " ")
+}
+
 #[derive(Debug, serde::Serialize, serde::Deserialize, Clone)]
 pub struct SearchResult {
     pub title: String,
@@ -102,7 +135,7 @@ impl ClmclmProvider {
             let magnet_element = element.select(&magnet_selector).next();
 
             if let (Some(title_node), Some(magnet_node)) = (title_element, magnet_element) {
-                let title = title_node.text().collect::<String>().trim().to_string();
+                let title = clean_html_text(&title_node.text().collect::<String>());
                 let source_url = title_node.value().attr("href").map(|s| format!("{}{}", self.base_url, s));
 
                 if let Some(magnet_link) = magnet_node.value().attr("href") {
@@ -193,8 +226,9 @@ pub struct GenericProvider {
 impl GenericProvider {
     pub fn new(name: String, url_template: String) -> Self {
         let client = reqwest::Client::builder()
-            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
+            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/131.0.0.0 Safari/537.36")
             .timeout(std::time::Duration::from_secs(30))
+            // reqwest默认启用gzip/deflate解压，不需要显式设置
             .build()
             .expect("Failed to create HTTP client");
 
@@ -235,38 +269,93 @@ impl SearchProvider for GenericProvider {
 
     async fn search(&self, query: &str, page: u32) -> Result<Vec<SearchResult>> {
         // 替换URL模板中的占位符
-        let url = self.url_template
-            .replace("{keyword}", query)
-            .replace("{page}", &page.to_string());
+        let mut url = self.url_template
+            .replace("{keyword}", query);
+
+        // Handle different page numbering systems
+        if url.contains("{page-1}") {
+            // 0-based pagination: subtract 1 from page number
+            let zero_based_page = if page > 0 { page - 1 } else { 0 };
+            url = url.replace("{page-1}", &zero_based_page.to_string());
+        } else {
+            // 1-based pagination (default)
+            url = url.replace("{page}", &page.to_string());
+        }
 
         println!("🔍 Searching: {}", url);
 
         let response = self.client
             .get(&url)
+            .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,image/apng,*/*;q=0.8,application/signed-exchange;v=b3;q=0.7")
+            .header("Accept-Language", "en-US,en;q=0.9")
+            .header("Accept-Encoding", "gzip, deflate, br")
+            .header("Cache-Control", "no-cache")
+            .header("Pragma", "no-cache")
+            .header("Sec-Ch-Ua", "\"Google Chrome\";v=\"131\", \"Chromium\";v=\"131\", \"Not_A Brand\";v=\"24\"")
+            .header("Sec-Ch-Ua-Mobile", "?0")
+            .header("Sec-Ch-Ua-Platform", "\"Windows\"")
+            .header("Sec-Fetch-Dest", "document")
+            .header("Sec-Fetch-Mode", "navigate")
+            .header("Sec-Fetch-Site", "cross-site")
+            .header("Sec-Fetch-User", "?1")
+            .header("Upgrade-Insecure-Requests", "1")
+            .header("Referer", "https://www.google.com/")
             .send()
             .await
-            .map_err(|e| anyhow!("Request failed: {}", e))?;
+            .map_err(|e| {
+                println!("❌ Request failed for {}: {}", url, e);
+                anyhow!("Request failed: {}", e)
+            })?;
 
         if !response.status().is_success() {
+            println!("❌ HTTP error {} for {}", response.status(), url);
             return Err(anyhow!("HTTP error: {}", response.status()));
         }
 
+        // 获取响应文本（reqwest自动处理压缩）
         let html = response.text().await
             .map_err(|e| anyhow!("Failed to read response: {}", e))?;
 
-        println!("✅ Response received, parsing...");
+        // 检查响应内容类型
+        let is_javascript = html.trim_start().starts_with("\"use strict\"") ||
+                           html.contains("webpack") ||
+                           html.contains("self.webpackChunk");
+
+        if is_javascript {
+            println!("⚠️ 网站返回JavaScript代码，可能是SPA或有反爬虫机制，跳过处理");
+            return Ok(Vec::new());
+        }
+
+        if html.contains('�') {
+            println!("⚠️ HTML包含乱码字符，可能存在编码问题");
+        }
+
+        // 只在出现问题时显示HTML预览
+        if html.contains('�') || is_javascript {
+            let preview = safe_truncate(&html, 500);
+            println!("🔍 HTML preview (前500字符，用于诊断):");
+            println!("---START---");
+            println!("{}", preview);
+            println!("---END---");
+        }
+
+        // 简单检查内容
+        let magnet_count = html.matches("magnet:").count();
+        if magnet_count == 0 {
+            let error_count = html.matches("404").count() + html.matches("Not Found").count();
+            if error_count > 0 {
+                println!("⚠️ 可能收到了错误页面，包含 {} 个错误指示符", error_count);
+            }
+        }
 
         // 对于自定义搜索引擎，使用AI智能识别流程
         let results = if let Some(llm_client) = &self.llm_client {
-            println!("🤖 Analyzing HTML with AI...");
             self.analyze_html_with_ai(&html, llm_client.clone()).await?
         } else {
-            println!("📊 Basic parsing (no AI)...");
             self.parse_generic_results(&html)?
         };
 
         println!("📊 Found {} results on page {}.", results.len(), page);
-        println!("✨ Final results after AI processing: {} items.", results.len());
         Ok(results)
     }
 }
@@ -305,10 +394,10 @@ impl GenericProvider {
 
     /// 使用AI从HTML中提取种子信息
     async fn extract_torrents_from_html_with_ai(&self, html: &str, llm_client: Arc<dyn LlmClient>) -> Result<Vec<SearchResult>> {
-        // 限制HTML长度以避免超出AI token限制
-        let truncated_html = if html.len() > 50000 {
-            println!("📏 HTML too long ({}), truncating.", html.len());
-            &html[..50000]
+        // 限制HTML长度以避免超出AI token限制 (250k tokens模型，使用80k字符约120k tokens)
+        let truncated_html = if html.len() > 80000 {
+            println!("📏 HTML too long ({} chars), truncating to 80k chars.", html.len());
+            safe_truncate(html, 80000)
         } else {
             html
         };
@@ -333,7 +422,12 @@ impl GenericProvider {
                 // 我们需要将整个结果传递给解析函数
                 self.parse_ai_html_response_from_batch(batch_result)
             }
-            Err(e) => Err(anyhow!("AI HTML analysis failed: {}", e))
+            Err(e) => {
+                println!("❌ AI HTML分析失败: {}", e);
+                println!("🤖 发送给AI的HTML长度: {} 字符", html_content.len());
+                println!("🤖 HTML前500字符预览: {}", safe_truncate(html_content, 500));
+                Err(anyhow!("AI HTML analysis failed: {}", e))
+            }
         }
     }
 
@@ -365,7 +459,7 @@ impl GenericProvider {
             });
 
             results.push(SearchResult {
-                title: basic_info.title,
+                title: clean_html_text(&basic_info.title),
                 magnet_link: basic_info.magnet_link,
                 file_size: basic_info.file_size,
                 upload_date: None, // 第一阶段不提取上传日期
@@ -489,7 +583,7 @@ impl GenericProvider {
                     if let Some(link) = cell.select(&link_selector).next() {
                         let link_text = link.text().collect::<String>().trim().to_string();
                         if !link_text.is_empty() && !link_text.starts_with("magnet:") {
-                            title = Some(link_text);
+                            title = Some(clean_html_text(&link_text));
                             // 提取source_url
                             if let Some(href) = link.value().attr("href") {
                                 source_url = Some(self.normalize_source_url(href));
@@ -499,7 +593,7 @@ impl GenericProvider {
                 }
                 // 如果没有链接，使用单元格文本
                 if title.is_none() && !cell_text.is_empty() && cell_text.len() > 5 {
-                    title = Some(cell_text.clone());
+                    title = Some(clean_html_text(&cell_text));
                 }
             }
 

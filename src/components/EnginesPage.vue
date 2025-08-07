@@ -23,37 +23,91 @@
       <div v-else class="engines-grid">
         <div v-for="engine in engines" :key="engine.id" class="engine-item">
           <div class="engine-content">
-            <div class="engine-header">
-              <h3>{{ engine.name }}</h3>
-              <div class="engine-status">
-                <label class="switch">
-                  <input
-                    type="checkbox"
-                    :checked="engine.is_enabled"
-                    @change="toggleEngine(engine.id, ($event.target as HTMLInputElement).checked)"
-                  />
-                  <span class="slider"></span>
-                </label>
+            <!-- Normal View -->
+            <div v-if="editingEngineId !== engine.id">
+              <div class="engine-header">
+                <h3>{{ engine.name }}</h3>
+                <div class="engine-status">
+                  <label class="switch">
+                    <input
+                      type="checkbox"
+                      :checked="engine.is_enabled"
+                      @change="toggleEngine(engine.id, ($event.target as HTMLInputElement).checked)"
+                    />
+                    <span class="slider"></span>
+                  </label>
+                </div>
+              </div>
+
+              <!-- URL and Actions Row -->
+              <div class="engine-url-row">
+                <div class="engine-url">{{ engine.url_template }}</div>
+                <div v-if="engine.is_deletable" class="engine-actions-inline">
+                  <button
+                    @click="startEditEngine(engine)"
+                    class="edit-btn"
+                    title="Edit engine"
+                  >
+                    ✏️
+                  </button>
+                  <button
+                    @click="deleteEngine(engine.id)"
+                    :class="['delete-btn', { 'confirm-delete': engine.id === pendingDeleteId }]"
+                    :title="engine.id === pendingDeleteId ? 'Confirm deletion' : 'Delete engine'"
+                  >
+                    {{ engine.id === pendingDeleteId ? '❓' : '🗑️' }}
+                  </button>
+                </div>
+              </div>
+
+              <div class="engine-meta">
+                <span v-if="!engine.is_deletable" class="default-badge">Default</span>
+                <span :class="['status-badge', engine.is_enabled ? 'enabled' : 'disabled']">
+                  {{ engine.is_enabled ? 'Enabled' : 'Disabled' }}
+                </span>
               </div>
             </div>
-            <div class="engine-url">{{ engine.url_template }}</div>
-            <div class="engine-meta">
-              <span v-if="!engine.is_deletable" class="default-badge">Default</span>
-              <span :class="['status-badge', engine.is_enabled ? 'enabled' : 'disabled']">
-                {{ engine.is_enabled ? 'Enabled' : 'Disabled' }}
-              </span>
+
+            <!-- Edit View -->
+            <div v-else class="engine-edit-form">
+              <div class="edit-form-group">
+                <label>Engine Name</label>
+                <input
+                  v-model="editingEngine.name"
+                  type="text"
+                  class="edit-input"
+                />
+              </div>
+
+              <!-- URL Template and Edit Actions Row -->
+              <div class="edit-url-row">
+                <div class="edit-form-group-inline">
+                  <label>URL Template</label>
+                  <input
+                    v-model="editingEngine.url_template"
+                    type="text"
+                    class="edit-input"
+                  />
+                </div>
+                <div class="edit-actions-inline">
+                  <button
+                    @click="saveEditEngine()"
+                    class="save-edit-btn"
+                    title="Save changes"
+                    :disabled="isSavingEdit"
+                  >
+                    {{ isSavingEdit ? '⏳' : '✅' }}
+                  </button>
+                  <button
+                    @click="cancelEditEngine()"
+                    class="cancel-edit-btn"
+                    title="Cancel editing"
+                  >
+                    ❌
+                  </button>
+                </div>
+              </div>
             </div>
-          </div>
-          
-          <div class="engine-actions">
-            <button
-              v-if="engine.is_deletable"
-              @click="deleteEngine(engine.id)"
-              :class="['delete-btn', { 'confirm-delete': engine.id === pendingDeleteId }]"
-              :title="engine.id === pendingDeleteId ? 'Confirm deletion' : 'Delete engine'"
-            >
-              {{ engine.id === pendingDeleteId ? '❓' : '🗑️' }}
-            </button>
           </div>
         </div>
       </div>
@@ -61,44 +115,108 @@
 
     <div class="add-engine-section">
       <div class="section-header">
-        <h2>Add New Engine (Experimental, may be very slow)</h2>
-        <p>Add a custom search engine by providing example URLs</p>
+        <h2>Add New Engine <span class="experimental-note">(Experimental, may be very slow)</span></h2>
+        <p>Add a custom search engine using direct template or auto-analysis</p>
       </div>
-      
+
+      <!-- Mode Selection -->
+      <div class="mode-selection">
+        <label class="mode-option">
+          <input type="radio" v-model="addEngineMode" value="auto" />
+          <span class="radio-mark"></span>
+          Auto-Analysis
+        </label>
+        <label class="mode-option">
+          <input type="radio" v-model="addEngineMode" value="advanced" />
+          <span class="radio-mark"></span>
+          Advanced: Direct URL Template
+        </label>
+      </div>
+
       <form @submit.prevent="addEngine" class="add-engine-form">
-        <div class="form-group">
-          <label for="engineName">Engine Name</label>
-          <input 
-            id="engineName"
-            v-model="newEngine.name" 
-            type="text" 
-            placeholder="e.g., My Custom Engine"
-            required
-          />
+        <!-- Advanced Mode -->
+        <div v-if="addEngineMode === 'advanced'" class="advanced-mode">
+          <p class="help-text">
+            Enter the URL template directly using placeholders: <code>{keyword}</code> for search terms
+            and <code>{page}</code> for 1-based pagination.
+          </p>
+
+          <div class="form-group">
+            <label for="engineName">Engine Name</label>
+            <input
+              id="engineName"
+              v-model="newEngine.name"
+              type="text"
+              placeholder="e.g., 1337x"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <label for="urlTemplate">URL Template</label>
+            <input
+              id="urlTemplate"
+              v-model="newEngine.urlTemplate"
+              type="text"
+              placeholder="e.g., https://1337x.to/search/{keyword}/{page}/"
+              required
+            />
+          </div>
+
+          <div class="template-examples">
+            <h4>Examples:</h4>
+            <ul>
+              <li><code>https://1337x.to/search/{keyword}/{page}/</code> - 1-based pagination</li>
+              <li><code>https://torrentz2.eu/search?f={keyword}&p={page-1}</code> - 0-based pagination</li>
+            </ul>
+          </div>
         </div>
-        
-        <div class="form-group">
-          <label for="urlExample1">URL Example 1 (search for 'test', page 1)</label>
-          <input 
-            id="urlExample1"
-            v-model="newEngine.urlExample1" 
-            type="url" 
-            placeholder="e.g., https://example.com/search?q=test&page=1"
-            required
-          />
-          <small>Paste the complete URL when searching for "test" on the first page</small>
-        </div>
-        
-        <div class="form-group">
-          <label for="urlExample2">URL Example 2 (search for 'test', page 2)</label>
-          <input 
-            id="urlExample2"
-            v-model="newEngine.urlExample2" 
-            type="url" 
-            placeholder="e.g., https://example.com/search?q=test&page=2"
-            required
-          />
-          <small>Paste the complete URL when searching for "test" on the second page</small>
+
+        <!-- Auto-Analysis Mode -->
+        <div v-if="addEngineMode === 'auto'" class="auto-mode">
+          <p class="help-text">
+            Enter two example URLs from the same search engine with different keywords and page numbers.
+            The system will automatically analyze the URL pattern and create a template.
+          </p>
+
+          <div class="form-group">
+            <label for="engineNameAuto">Engine Name</label>
+            <input
+              id="engineNameAuto"
+              v-model="newEngine.name"
+              type="text"
+              placeholder="e.g., My Custom Engine"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <div class="label-with-help">
+              <label for="urlExample1">URL Example 1 (search for 'test', page 1)</label>
+              <small>Paste the complete URL when searching for "test" on the first page</small>
+            </div>
+            <input
+              id="urlExample1"
+              v-model="newEngine.urlExample1"
+              type="url"
+              placeholder="e.g., https://example.com/search?q=test&page=1"
+              required
+            />
+          </div>
+
+          <div class="form-group">
+            <div class="label-with-help">
+              <label for="urlExample2">URL Example 2 (search for 'test', page 2)</label>
+              <small>Paste the complete URL when searching for "test" on the second page</small>
+            </div>
+            <input
+              id="urlExample2"
+              v-model="newEngine.urlExample2"
+              type="url"
+              placeholder="e.g., https://example.com/search?q=test&page=2"
+              required
+            />
+          </div>
         </div>
         
         <div class="form-actions">
@@ -132,10 +250,24 @@ const isAdding = ref(false);
 const pendingDeleteId = ref<string | null>(null);
 const deleteTimeout = ref<any>(null);
 
+// Edit engine related
+const editingEngineId = ref<string | null>(null);
+const editingEngine = ref<SearchEngine>({
+  id: '',
+  name: '',
+  url_template: '',
+  is_enabled: false,
+  is_deletable: false
+});
+const isSavingEdit = ref(false);
+
+const addEngineMode = ref('auto'); // 'advanced' or 'auto'
+
 const newEngine = ref({
   name: '',
   urlExample1: '',
-  urlExample2: ''
+  urlExample2: '',
+  urlTemplate: ''
 });
 
 onMounted(() => {
@@ -192,28 +324,55 @@ async function deleteEngine(id: string) {
 }
 
 async function addEngine() {
-  if (!newEngine.value.name || !newEngine.value.urlExample1 || !newEngine.value.urlExample2) {
-    showNotification("Please fill in all fields", 'error');
-    return;
+  // Validation based on mode
+  if (addEngineMode.value === 'advanced') {
+    if (!newEngine.value.name || !newEngine.value.urlTemplate) {
+      showNotification("Please fill in all fields", 'error');
+      return;
+    }
+
+    // Validate template format
+    if (!newEngine.value.urlTemplate.includes('{keyword}')) {
+      showNotification("URL template must contain {keyword} placeholder", 'error');
+      return;
+    }
+
+    if (!newEngine.value.urlTemplate.includes('{page}') && !newEngine.value.urlTemplate.includes('{page-1}')) {
+      showNotification("URL template must contain {page} or {page-1} placeholder", 'error');
+      return;
+    }
+  } else {
+    if (!newEngine.value.name || !newEngine.value.urlExample1 || !newEngine.value.urlExample2) {
+      showNotification("Please fill in all fields", 'error');
+      return;
+    }
   }
 
   isAdding.value = true;
   try {
-    // Generate URL template from examples
-    const urlTemplate = generateUrlTemplate(newEngine.value.urlExample1, newEngine.value.urlExample2);
-    
+    let urlTemplate: string;
+
+    if (addEngineMode.value === 'advanced') {
+      // Use the template directly
+      urlTemplate = newEngine.value.urlTemplate;
+    } else {
+      // Generate URL template from examples
+      urlTemplate = generateUrlTemplate(newEngine.value.urlExample1, newEngine.value.urlExample2);
+    }
+
     await invoke("add_search_engine", {
       name: newEngine.value.name,
       urlTemplate
     });
-    
+
     // Reset form
     newEngine.value = {
       name: '',
       urlExample1: '',
-      urlExample2: ''
+      urlExample2: '',
+      urlTemplate: ''
     };
-    
+
     await loadEngines(); // Reload the list
     showNotification("Search engine added successfully!");
   } catch (error) {
@@ -282,8 +441,11 @@ function generateUrlTemplate(url1: string, url2: string): string {
           // This is likely the keyword parameter
           templateParams.push(`${key}={keyword}`);
         } else if (value1 === '1' && value2 === '2') {
-          // This is likely the page parameter
+          // This is 1-based pagination (page 1, page 2)
           templateParams.push(`${key}={page}`);
+        } else if (value1 === '0' && value2 === '1') {
+          // This is 0-based pagination (page 0, page 1) - need to subtract 1 from page number
+          templateParams.push(`${key}={page-1}`);
         } else if (value1 === value2) {
           // Same value in both URLs
           templateParams.push(`${key}=${value1}`);
@@ -414,13 +576,73 @@ function generateParameterTemplate(key: string, value1: string, value2: string):
     const num1 = parseInt(value1);
     const num2 = parseInt(value2);
 
-    if (Math.abs(num1 - num2) === 1) {
+    if (num1 === 1 && num2 === 2) {
+      // 1-based pagination
+      return `${key}={page}`;
+    } else if (num1 === 0 && num2 === 1) {
+      // 0-based pagination - need to subtract 1 from page number
+      return `${key}={page-1}`;
+    } else if (Math.abs(num1 - num2) === 1) {
+      // Other sequential patterns, assume 1-based as default
       return `${key}={page}`;
     }
   }
 
   // Default: use first value
   return `${key}=${value1}`;
+}
+
+// Edit engine functions
+function startEditEngine(engine: SearchEngine) {
+  editingEngineId.value = engine.id;
+  editingEngine.value = { ...engine };
+}
+
+function cancelEditEngine() {
+  editingEngineId.value = null;
+  editingEngine.value = {
+    id: '',
+    name: '',
+    url_template: '',
+    is_enabled: false,
+    is_deletable: false
+  };
+}
+
+async function saveEditEngine() {
+  if (!editingEngine.value.name || !editingEngine.value.url_template) {
+    showNotification("Please fill in all fields", 'error');
+    return;
+  }
+
+  // Validate template format
+  if (!editingEngine.value.url_template.includes('{keyword}')) {
+    showNotification("URL template must contain {keyword} placeholder", 'error');
+    return;
+  }
+
+  if (!editingEngine.value.url_template.includes('{page}') && !editingEngine.value.url_template.includes('{page-1}')) {
+    showNotification("URL template must contain {page} or {page-1} placeholder", 'error');
+    return;
+  }
+
+  isSavingEdit.value = true;
+  try {
+    await invoke("update_search_engine", {
+      id: editingEngine.value.id,
+      name: editingEngine.value.name,
+      urlTemplate: editingEngine.value.url_template
+    });
+
+    await loadEngines(); // Reload the list
+    cancelEditEngine(); // Exit edit mode
+    showNotification("Search engine updated successfully!");
+  } catch (error) {
+    console.error("Failed to update engine:", error);
+    showNotification(`Failed to update engine: ${error}`, 'error');
+  } finally {
+    isSavingEdit.value = false;
+  }
 }
 </script>
 
@@ -510,9 +732,6 @@ function generateParameterTemplate(key: string, value1: string, value2: string):
 }
 
 .engine-item {
-  display: flex;
-  justify-content: space-between;
-  align-items: flex-start;
   padding: 20px;
   border: 1px solid #e2e8f0;
   border-radius: 8px;
@@ -542,15 +761,29 @@ function generateParameterTemplate(key: string, value1: string, value2: string):
   color: #1a202c;
 }
 
+/* URL Row Styles */
+.engine-url-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 12px;
+}
+
 .engine-url {
+  flex: 1;
   font-size: 14px;
   color: #4a5568;
   font-family: monospace;
   background: #f7fafc;
   padding: 8px 12px;
   border-radius: 4px;
-  margin-bottom: 12px;
   word-break: break-all;
+}
+
+.engine-actions-inline {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
 }
 
 .engine-meta {
@@ -625,10 +858,6 @@ input:checked + .slider:before {
   transform: translateX(24px);
 }
 
-.engine-actions {
-  margin-left: 16px;
-}
-
 .delete-btn {
   width: 36px;
   height: 36px;
@@ -661,13 +890,14 @@ input:checked + .slider:before {
 
 .form-group {
   display: grid;
-  gap: 8px;
+  gap: 12px;
 }
 
 .form-group label {
   font-weight: 600;
   color: #1a202c;
-  font-size: 14px;
+  font-size: 16px;
+  margin-top: 8px;
 }
 
 .form-group input {
@@ -686,6 +916,21 @@ input:checked + .slider:before {
 .form-group small {
   color: #718096;
   font-size: 12px;
+}
+
+/* Label with Help Text Styles */
+.label-with-help {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 16px;
+}
+
+.label-with-help small {
+  color: #718096;
+  font-size: 12px;
+  font-style: italic;
+  flex-shrink: 0;
 }
 
 .form-actions {
@@ -714,5 +959,238 @@ input:checked + .slider:before {
 .add-btn:disabled {
   opacity: 0.6;
   cursor: not-allowed;
+}
+
+/* Mode Selection Styles */
+.mode-selection {
+  display: flex;
+  gap: 20px;
+  margin-bottom: 20px;
+  padding: 16px;
+  background: #f7fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.mode-option {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  cursor: pointer;
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a202c;
+  user-select: none;
+}
+
+.mode-option input[type="radio"] {
+  display: none;
+}
+
+.radio-mark {
+  width: 16px;
+  height: 16px;
+  border: 2px solid #d1d5db;
+  border-radius: 50%;
+  position: relative;
+  transition: all 0.2s ease;
+  background: white;
+}
+
+.mode-option input[type="radio"]:checked + .radio-mark {
+  border-color: #3b82f6;
+  background: #3b82f6;
+}
+
+.mode-option input[type="radio"]:checked + .radio-mark::after {
+  content: '';
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  width: 6px;
+  height: 6px;
+  background: white;
+  border-radius: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.mode-option:hover .radio-mark {
+  border-color: #3b82f6;
+}
+
+/* Template Examples Styles */
+.template-examples {
+  margin-top: 16px;
+  padding: 16px;
+  background: #f8fafc;
+  border-radius: 8px;
+  border: 1px solid #e2e8f0;
+}
+
+.template-examples h4 {
+  margin: 0 0 12px 0;
+  font-size: 14px;
+  font-weight: 600;
+  color: #1a202c;
+}
+
+.template-examples ul {
+  margin: 0;
+  padding-left: 20px;
+}
+
+.template-examples li {
+  margin-bottom: 8px;
+  font-size: 13px;
+  color: #4a5568;
+}
+
+.template-examples code {
+  background: #e2e8f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: #2d3748;
+}
+
+.help-text code {
+  background: #e2e8f0;
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: 'Courier New', monospace;
+  font-size: 12px;
+  color: #2d3748;
+}
+
+/* Mode Content Styles */
+.advanced-mode, .auto-mode {
+  margin-top: 0px;
+}
+
+.advanced-mode .help-text, .auto-mode .help-text {
+  margin-top: 4px;
+  margin-bottom: 16px;
+}
+
+/* Experimental Note Styles */
+.experimental-note {
+  font-size: 14px;
+  font-weight: 400;
+  color: #f56565;
+  font-style: italic;
+}
+
+/* Edit Engine Styles */
+.engine-edit-form {
+  display: grid;
+  gap: 16px;
+}
+
+/* Edit URL Row Styles */
+.edit-url-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.edit-form-group-inline {
+  flex: 1;
+  display: grid;
+  gap: 12px;
+}
+
+.edit-form-group-inline label {
+  font-weight: 600;
+  color: #1a202c;
+  font-size: 16px;
+  margin-top: 8px;
+}
+
+.edit-actions-inline {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+  margin-bottom: 2px; /* Align with input field */
+}
+
+.edit-form-group {
+  display: grid;
+  gap: 12px;
+}
+
+.edit-form-group label {
+  font-weight: 600;
+  color: #1a202c;
+  font-size: 16px;
+  margin-top: 8px;
+}
+
+.edit-input {
+  padding: 8px 12px;
+  border: 2px solid #e2e8f0;
+  border-radius: 6px;
+  font-size: 14px;
+  transition: border-color 0.2s;
+}
+
+.edit-input:focus {
+  outline: none;
+  border-color: #3b82f6;
+}
+
+
+
+.edit-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 6px;
+  background: #e2e8f0;
+  color: #4a5568;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+
+.edit-btn:hover {
+  background: #cbd5e0;
+}
+
+.save-edit-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 6px;
+  background: #c6f6d5;
+  color: #276749;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+
+.save-edit-btn:hover:not(:disabled) {
+  background: #9ae6b4;
+}
+
+.save-edit-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.cancel-edit-btn {
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: 6px;
+  background: #fed7d7;
+  color: #c53030;
+  cursor: pointer;
+  font-size: 16px;
+  transition: all 0.2s;
+}
+
+.cancel-edit-btn:hover {
+  background: #feb2b2;
 }
 </style>

@@ -110,6 +110,24 @@ impl Default for SearchSettings {
     }
 }
 
+/// 下载配置
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DownloadConfig {
+    pub custom_app_path: Option<String>, // 自定义应用程序路径
+    pub enable_quick_download: bool, // 是否启用快速下载按钮
+    pub auto_close_page: bool, // 是否自动关闭下载页面
+}
+
+impl Default for DownloadConfig {
+    fn default() -> Self {
+        Self {
+            custom_app_path: None,
+            enable_quick_download: true,
+            auto_close_page: true,
+        }
+    }
+}
+
 /// 应用状态数据结构
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct AppData {
@@ -118,6 +136,7 @@ pub struct AppData {
     pub priority_keywords: Vec<PriorityKeyword>,
     pub llm_config: LlmConfig,
     pub search_settings: SearchSettings,
+    pub download_config: DownloadConfig,
     pub version: String, // 用于数据迁移
 }
 
@@ -138,6 +157,7 @@ impl Default for AppData {
             priority_keywords: Vec::new(),
             llm_config: LlmConfig::default(),
             search_settings: SearchSettings::default(),
+            download_config: DownloadConfig::default(),
             version: "1.0.0".to_string(),
         }
     }
@@ -292,7 +312,7 @@ pub fn add_search_engine(
     url_template: String,
 ) -> Result<SearchEngine> {
     let mut data = state.lock().unwrap();
-    
+
     let engine = SearchEngine {
         id: Uuid::new_v4().to_string(),
         name,
@@ -300,9 +320,27 @@ pub fn add_search_engine(
         is_enabled: true,
         is_deletable: true,
     };
-    
+
     data.search_engines.push(engine.clone());
     Ok(engine)
+}
+
+/// 更新搜索引擎
+pub fn update_search_engine(
+    state: &AppState,
+    id: String,
+    name: String,
+    url_template: String,
+) -> Result<()> {
+    let mut data = state.lock().unwrap();
+
+    if let Some(engine) = data.search_engines.iter_mut().find(|e| e.id == id) {
+        engine.name = name;
+        engine.url_template = url_template;
+        Ok(())
+    } else {
+        Err(anyhow!("Search engine not found"))
+    }
 }
 
 /// 获取所有搜索引擎
@@ -436,5 +474,20 @@ pub fn get_search_settings(state: &AppState) -> SearchSettings {
 pub fn update_search_settings(state: &AppState, settings: SearchSettings) -> Result<()> {
     let mut data = state.lock().unwrap();
     data.search_settings = settings;
+    Ok(())
+}
+
+// ============ 下载配置相关函数 ============
+
+/// 获取下载配置
+pub fn get_download_config(state: &AppState) -> DownloadConfig {
+    let data = state.lock().unwrap();
+    data.download_config.clone()
+}
+
+/// 更新下载配置
+pub fn update_download_config(state: &AppState, config: DownloadConfig) -> Result<()> {
+    let mut data = state.lock().unwrap();
+    data.download_config = config;
     Ok(())
 }

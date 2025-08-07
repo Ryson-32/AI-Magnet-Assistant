@@ -224,14 +224,20 @@ impl GeminiClient {
             r#"
 作为数据提取引擎，你的唯一任务是从以下HTML内容中识别出所有磁力链接条目，并返回一个包含 "results" 数组的JSON对象。
 
+**重要提示**: 如果HTML内容包含乱码字符(�)或看起来不是正常的HTML，请仍然尝试提取任何可识别的磁力链接。
+
 **提取规则:**
-1.  **识别条目**: 找到包含磁力链接 (`magnet:?xt=`) 的HTML片段。
+1.  **识别条目**: 找到包含磁力链接 (`magnet:?xt=`) 的HTML片段。磁力链接通常在以下位置：
+    - `<a href="magnet:?xt=urn:btih:...">` 标签中
+    - 可能在各种HTML结构中，如表格、列表、div等
 2.  **提取字段**:
-    *   `title`: 提取与磁力链接相关的最直接的标题文本。**不要进行任何形式的清理、修改或美化**。返回原始文本。
-    *   `magnet_link`: 提取完整的磁力链接字符串。
-    *   `file_size`: 提取与该条目相关的文件大小文本（例如 "1.5GB", "899MB"）。如果找不到，则返回 `null`。
+    *   `title`: 提取与磁力链接相关的最直接的标题文本。**重要：移除所有HTML标签（如<b>、<em>、<strong>等），只返回纯文本内容**。
+    *   `magnet_link`: 提取完整的磁力链接字符串，必须以 `magnet:?xt=` 开头。
+    *   `file_size`: 提取与该条目相关的文件大小文本（例如 "1.5GB", "899MB", "78.78G"）。如果找不到，则返回 `null`。
     *   `source_url`: 提取与该条目相关的详情页面链接或源页面URL。通常是标题链接的href属性。如果找不到，则返回 `null`。
 3.  **严格JSON输出**: 返回的JSON对象必须只包含一个 `results` 键，其值为一个对象数组。每个对象都包含 `title`, `magnet_link`, `file_size`, `source_url` 字段。
+
+**如果找不到任何磁力链接，请返回空数组但仍要说明原因**。
 
 **重要指令:**
 *   **绝对禁止修改数据**: 你的任务是提取，不是处理。返回你找到的原始信息。
@@ -274,8 +280,11 @@ impl GeminiClient {
         };
 
         let response = self.client.post(&url).json(&request_body).send().await?;
+
         if !response.status().is_success() {
+            let status = response.status();
             let error_body = response.text().await.unwrap_or_default();
+            println!("❌ API请求失败: {} - {}", status, error_body);
             return Err(anyhow::anyhow!("API请求失败: {}", error_body));
         }
 
@@ -285,6 +294,9 @@ impl GeminiClient {
                 let cleaned_text = part.text.trim().replace("```json", "").replace("```", "");
                 let result: BatchExtractBasicInfoResult = serde_json::from_str(&cleaned_text)
                     .map_err(|e| {
+                        println!("❌ JSON解析失败: {}", e);
+                        println!("📄 原始AI响应: {}", part.text);
+                        println!("🧹 清理后文本: {}", cleaned_text);
                         anyhow::anyhow!(
                             "解析第一阶段JSON失败: {}. Raw text: {}",
                             e,

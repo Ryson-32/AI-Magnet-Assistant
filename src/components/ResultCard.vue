@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
+import { invoke } from "@tauri-apps/api/core";
 
 interface Props {
   title?: string;
@@ -17,10 +18,13 @@ const props = defineProps<Props>();
 
 const emit = defineEmits<{
   addToFavorites: [result: any];
+  showNotification: [message: string, type?: 'success' | 'error'];
 }>();
 
 const showFullLink = ref(false);
 const copied = ref(false);
+const quickDownloadEnabled = ref(true);
+const isDownloading = ref(false);
 
 // 计算剩余文件的tooltip内容
 const remainingFilesTooltip = computed(() => {
@@ -63,6 +67,37 @@ function addToFavorites() {
 function openSourceUrl() {
   if (props.sourceUrl) {
     window.open(props.sourceUrl, '_blank');
+  }
+}
+
+// 快速下载相关函数
+onMounted(async () => {
+  await loadDownloadConfig();
+});
+
+async function loadDownloadConfig() {
+  try {
+    const config = await invoke("get_download_config");
+    quickDownloadEnabled.value = (config as any).enable_quick_download;
+  } catch (error) {
+    console.error("Failed to load download config:", error);
+    quickDownloadEnabled.value = false;
+  }
+}
+
+async function quickDownload(magnetLink: string | undefined) {
+  if (!magnetLink) return;
+
+  isDownloading.value = true;
+  try {
+    await invoke("open_magnet_link", { magnetLink });
+    console.log("Magnet link opened successfully");
+    emit('showNotification', 'Download started successfully!', 'success');
+  } catch (error) {
+    console.error("Failed to open magnet link:", error);
+    emit('showNotification', `Failed to start download: ${error}`, 'error');
+  } finally {
+    isDownloading.value = false;
   }
 }
 
@@ -134,6 +169,16 @@ function openSourceUrl() {
           :title="copied ? 'Copied!' : 'Copy magnet link'"
         >
           {{ copied ? '✓' : '📋' }}
+        </button>
+        <button
+          v-if="quickDownloadEnabled"
+          @click="quickDownload(magnetLink)"
+          class="quick-download-btn"
+          :class="{ 'downloading': isDownloading }"
+          :title="isDownloading ? 'Opening...' : 'Quick download'"
+          :disabled="isDownloading"
+        >
+          {{ isDownloading ? '⏳' : '⬇️' }}
         </button>
       </div>
     </div>
@@ -285,6 +330,44 @@ function openSourceUrl() {
 
 .copy-btn-icon.copied {
   color: #27ae60;
+}
+
+.quick-download-btn {
+  border: none;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  white-space: nowrap;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: transparent;
+  padding: 4px;
+  border-radius: 50%;
+  font-size: 18px;
+  font-weight: 900;
+  color: #1e3a8a;
+  flex-shrink: 0;
+}
+
+.quick-download-btn:hover:not(:disabled) {
+  background: #f0f0f0;
+  transform: scale(1.1);
+}
+
+.quick-download-btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+.quick-download-btn.downloading {
+  color: #f39c12;
+  animation: pulse 1.5s infinite;
+}
+
+@keyframes pulse {
+  0% { opacity: 1; }
+  50% { opacity: 0.5; }
+  100% { opacity: 1; }
 }
 
 .favorite-btn {

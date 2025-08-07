@@ -214,8 +214,72 @@
         </div>
 
         <button type="button" @click="saveLlmConfig" :disabled="isSaving" class="save-btn">
-          {{ isSaving ? 'Saving...' : 'Save All Settings' }}
+          {{ isSaving ? 'Saving...' : 'Save AI Settings' }}
         </button>
+      </div>
+    </div>
+
+    <div class="settings-section">
+      <div class="section-header">
+        <h2>Download Configuration</h2>
+        <p>Configure how magnet links are opened for quick downloading</p>
+      </div>
+
+      <div class="settings-form">
+        <div class="form-group">
+          <label for="customAppPath">Application Path</label>
+          <div class="input-with-button">
+            <input
+              id="customAppPath"
+              v-model="downloadConfig.custom_app_path"
+              type="text"
+              placeholder="e.g., C:\Program Files\qBittorrent\qbittorrent.exe"
+            />
+            <button type="button" @click="browseForApplication" class="browse-btn">
+              Browse
+            </button>
+          </div>
+          <small class="help-text">
+            Path to your preferred application for handling magnet links (e.g., qBittorrent, uTorrent, 115 Browser, etc.)
+          </small>
+        </div>
+
+        <div class="form-group">
+          <div class="checkbox-container">
+            <label class="checkbox-only">
+              <input
+                type="checkbox"
+                v-model="downloadConfig.auto_close_page"
+              />
+              <span class="checkmark"></span>
+            </label>
+            <span class="checkbox-text">Auto-close download page</span>
+          </div>
+          <small class="help-text">
+            Automatically close the download page after 10 seconds
+          </small>
+        </div>
+
+        <div class="form-group checkbox-with-button">
+          <div class="checkbox-section">
+            <div class="checkbox-container">
+              <label class="checkbox-only">
+                <input
+                  type="checkbox"
+                  v-model="downloadConfig.enable_quick_download"
+                />
+                <span class="checkmark"></span>
+              </label>
+              <span class="checkbox-text">Enable Quick Download Button</span>
+            </div>
+            <small class="help-text">
+              Show a quick download button next to each magnet link in search results
+            </small>
+          </div>
+          <button type="button" @click="saveDownloadConfig" :disabled="isSavingDownload" class="save-btn-inline">
+            {{ isSavingDownload ? 'Saving...' : 'Save Download Settings' }}
+          </button>
+        </div>
       </div>
     </div>
 
@@ -304,9 +368,19 @@ const isTestingAnalysis = ref(false);
 const showRateLimit = ref(false);
 let hideTimeout: number | null = null;
 
+// 下载配置相关
+const downloadConfig = ref({
+  custom_app_path: null as string | null,
+  enable_quick_download: true,
+  auto_close_page: true,
+});
+
+const isSavingDownload = ref(false);
+
 
 onMounted(async () => {
   await loadLlmConfig();
+  await loadDownloadConfig();
 });
 
 watch(() => llmConfig.value.extraction_config.provider, (newProvider) => {
@@ -418,6 +492,46 @@ function clearHideTimeout() {
     hideTimeout = null;
   }
   showRateLimit.value = true;
+}
+
+// 下载配置相关函数
+async function loadDownloadConfig() {
+  try {
+    const config = await invoke("get_download_config");
+    downloadConfig.value = config as any;
+    console.log("Download config loaded:", config);
+  } catch (error) {
+    console.error("Failed to load download config:", error);
+    showNotification(`Failed to load download config: ${error}`, 'error');
+  }
+}
+
+async function saveDownloadConfig() {
+  isSavingDownload.value = true;
+  try {
+    console.log("Saving download config:", downloadConfig.value);
+    await invoke("update_download_config", { config: downloadConfig.value });
+    console.log("Download config saved successfully");
+    showNotification("Download settings saved successfully!");
+  } catch (error) {
+    console.error("Failed to save download config:", error);
+    showNotification(`Failed to save download settings: ${error}`, 'error');
+  } finally {
+    isSavingDownload.value = false;
+  }
+}
+
+async function browseForApplication() {
+  try {
+    const result = await invoke("browse_for_file");
+    if (result) {
+      downloadConfig.value.custom_app_path = result as string;
+      console.log("Selected application path:", result);
+    }
+  } catch (error) {
+    console.error("Failed to browse for application:", error);
+    showNotification(`Failed to browse for application: ${error}`, 'error');
+  }
 }
 
 async function openConfigFolder() {
@@ -868,5 +982,116 @@ async function openConfigFolder() {
 .open-folder-btn:hover {
   background: #eff6ff;
   border-color: #2563eb;
+}
+
+/* Checkbox 样式 */
+.checkbox-container {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.checkbox-only {
+  cursor: pointer;
+  user-select: none;
+}
+
+.checkbox-only input[type="checkbox"] {
+  display: none;
+}
+
+.checkbox-text {
+  font-size: 14px;
+  font-weight: 500;
+  color: #1a202c;
+  user-select: none;
+}
+
+.checkmark {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #d1d5db;
+  border-radius: 4px;
+  position: relative;
+  transition: all 0.2s ease;
+  background: white;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.checkbox-only input[type="checkbox"]:checked + .checkmark {
+  background: #3b82f6;
+  border-color: #3b82f6;
+}
+
+.checkbox-only input[type="checkbox"]:checked + .checkmark::after {
+  content: '✓';
+  color: white;
+  font-size: 14px;
+  font-weight: bold;
+  line-height: 1;
+}
+
+.checkbox-only:hover .checkmark {
+  border-color: #3b82f6;
+}
+
+/* 复选框与按钮的布局 */
+.checkbox-with-button {
+  display: flex;
+  align-items: flex-start;
+  gap: 20px;
+}
+
+.checkbox-section {
+  flex: 1;
+}
+
+.save-btn-inline {
+  padding: 12px 24px;
+  background: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-size: 16px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+  align-self: flex-start;
+  margin-top: 4px;
+}
+
+.save-btn-inline:hover:not(:disabled) {
+  background: #2563eb;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.save-btn-inline:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+
+
+/* Browse按钮样式 */
+.browse-btn {
+  padding: 12px 20px;
+  background: #f7fafc;
+  color: #4a5568;
+  border: 2px solid #e2e8f0;
+  border-radius: 8px;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s;
+  white-space: nowrap;
+}
+
+.browse-btn:hover {
+  background: #edf2f7;
+  border-color: #cbd5e0;
 }
 </style>

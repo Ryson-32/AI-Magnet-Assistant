@@ -69,6 +69,7 @@
             :file-list="result.file_list"
             :source-url="result.source_url"
             @add-to-favorites="addToFavorites"
+            @show-notification="handleNotification"
           />
           <div v-if="result.analysis && result.analysis.error" class="error-details">
             <div class="error-header" @click="toggleErrorExpanded(result)">
@@ -570,6 +571,10 @@ async function addToFavorites(result: any) {
 
 function toggleErrorExpanded(result: any) {
   result.errorExpanded = !result.errorExpanded;
+}
+
+function handleNotification(message: string, type?: 'success' | 'error') {
+  showNotification(message, type);
 }
 
 

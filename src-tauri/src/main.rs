@@ -260,6 +260,23 @@ async fn add_search_engine(
 }
 
 #[tauri::command]
+async fn update_search_engine(
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, app_state::AppState>,
+    id: String,
+    name: String,
+    url_template: String,
+) -> Result<(), String> {
+    app_state::update_search_engine(&state, id, name, url_template)
+        .map_err(|e| e.to_string())?;
+
+    // 保存状态到文件
+    app_state::save_app_state(&app_handle, &state).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
 async fn get_all_engines(state: tauri::State<'_, app_state::AppState>) -> Result<Vec<app_state::SearchEngine>, String> {
     Ok(app_state::get_all_engines(&state))
 }
@@ -584,6 +601,257 @@ async fn update_search_settings(
     Ok(())
 }
 
+// ============ 下载配置相关命令 ============
+
+#[tauri::command]
+async fn get_download_config(state: tauri::State<'_, app_state::AppState>) -> Result<app_state::DownloadConfig, String> {
+    Ok(app_state::get_download_config(&state))
+}
+
+#[tauri::command]
+async fn update_download_config(
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, app_state::AppState>,
+    config: app_state::DownloadConfig,
+) -> Result<(), String> {
+    app_state::update_download_config(&state, config).map_err(|e| e.to_string())?;
+
+    // 保存状态到文件
+    app_state::save_app_state(&app_handle, &state).map_err(|e| e.to_string())?;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn open_magnet_link(
+    state: tauri::State<'_, app_state::AppState>,
+    magnet_link: String,
+) -> Result<(), String> {
+    let config = app_state::get_download_config(&state);
+
+    if let Some(ref app_path) = config.custom_app_path {
+        // 检查是否是115浏览器
+        if app_path.to_lowercase().contains("115chrome") || app_path.to_lowercase().contains("115browser") {
+            // 为115浏览器创建临时HTML文件
+            create_and_open_magnet_html(&magnet_link, app_path, &config).await?;
+        } else {
+            // 对于其他应用程序，直接打开磁力链接
+            tauri_plugin_opener::open_path(&magnet_link, Some(app_path.as_str()))
+                .map_err(|_| "Failed to open with specified application. Please check the application path in settings.".to_string())?;
+        }
+    } else {
+        // 使用系统默认应用打开磁力链接
+        tauri_plugin_opener::open_path(&magnet_link, None::<&str>)
+            .map_err(|_| "No application is configured to handle magnet links. Please configure an application path in settings.".to_string())?;
+    }
+
+    Ok(())
+}
+
+async fn create_and_open_magnet_html(magnet_link: &str, browser_path: &str, config: &app_state::DownloadConfig) -> Result<(), String> {
+    use std::fs;
+    use std::process::Command;
+
+    // 创建临时目录
+    let temp_dir = std::env::temp_dir();
+    let html_file = temp_dir.join("magnet_download.html");
+
+    // 创建HTML内容，包含磁力链接
+    let auto_close_script = if config.auto_close_page {
+        r#"
+        // 自动关闭页面
+        setTimeout(function() {
+            window.close();
+        }, 10000);
+        "#.to_string()
+    } else {
+        String::new()
+    };
+
+    let close_info = if config.auto_close_page {
+        "This page will close automatically in 10 seconds.".to_string()
+    } else {
+        "You can close this page manually.".to_string()
+    };
+
+    let html_content = format!(r#"
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>115 Offline Download</title>
+    <style>
+        body {{
+            font-family: Arial, sans-serif;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }}
+        .container {{
+            text-align: center;
+            background: white;
+            padding: 40px;
+            border-radius: 15px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.2);
+            max-width: 500px;
+        }}
+        .success-icon {{
+            font-size: 48px;
+            color: #28a745;
+            margin-bottom: 20px;
+        }}
+        .magnet-link {{
+            display: inline-block;
+            padding: 12px 24px;
+            background: #3b82f6;
+            color: white;
+            text-decoration: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            margin: 20px 0;
+            transition: all 0.2s;
+            border: none;
+            cursor: pointer;
+        }}
+        .magnet-link:hover {{
+            background: #2563eb;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+        }}
+        .status {{
+            color: #28a745;
+            font-weight: bold;
+            font-size: 18px;
+            margin: 20px 0;
+        }}
+        .info {{
+            color: #666;
+            margin-top: 20px;
+            font-size: 14px;
+        }}
+        .countdown {{
+            color: #007bff;
+            font-weight: bold;
+        }}
+    </style>
+    <script>
+        let countdown = 10;
+
+        // 自动点击磁力链接
+        window.onload = function() {{
+            setTimeout(function() {{
+                document.getElementById('magnetLink').click();
+                document.getElementById('status').innerHTML = '✅ Download started successfully!';
+
+                // 开始倒计时
+                if (countdown > 0) {{
+                    updateCountdown();
+                }}
+            }}, 1000);
+        }};
+
+        function updateCountdown() {{
+            if (countdown > 0) {{
+                document.getElementById('countdown').innerHTML = countdown;
+                countdown--;
+                setTimeout(updateCountdown, 1000);
+            }}
+        }}
+
+        {}
+    </script>
+</head>
+<body>
+    <div class="container">
+        <div class="success-icon">📥</div>
+        <h2>115 Offline Download</h2>
+        <div id="status" class="status">Starting download...</div>
+        <p>If download doesn't start automatically, click below:</p>
+        <a href="{}" id="magnetLink" class="magnet-link">Manual Download</a>
+        <p class="info">{}</p>
+        <p class="info countdown" id="countdown-info">
+            <span id="countdown">{}</span>
+        </p>
+    </div>
+</body>
+</html>
+"#,
+    auto_close_script,
+    magnet_link,
+    close_info,
+    if config.auto_close_page { "10" } else { "" }
+);
+
+    // 写入HTML文件
+    fs::write(&html_file, html_content)
+        .map_err(|e| format!("Failed to create temporary HTML file: {}", e))?;
+
+    // 使用115浏览器打开HTML文件
+    let _output = Command::new(browser_path)
+        .arg(html_file.to_string_lossy().as_ref())
+        .spawn()
+        .map_err(|e| format!("Failed to launch 115 browser: {}", e))?;
+
+    // 等待一下让浏览器启动
+    tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
+
+    // 异步删除临时文件（延迟删除，确保浏览器已经读取）
+    let html_file_clone = html_file.clone();
+    tokio::spawn(async move {
+        // 等待足够长的时间确保浏览器已经加载了文件
+        tokio::time::sleep(tokio::time::Duration::from_secs(30)).await;
+        let _ = std::fs::remove_file(html_file_clone);
+    });
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn browse_for_file() -> Result<Option<String>, String> {
+    use std::process::Command;
+
+    // 使用Windows的文件对话框
+    #[cfg(target_os = "windows")]
+    {
+        let output = Command::new("powershell")
+            .args(&[
+                "-Command",
+                r#"
+                Add-Type -AssemblyName System.Windows.Forms
+                $dialog = New-Object System.Windows.Forms.OpenFileDialog
+                $dialog.Filter = "Executable files (*.exe)|*.exe|All files (*.*)|*.*"
+                $dialog.Title = "Select Application"
+                if ($dialog.ShowDialog() -eq [System.Windows.Forms.DialogResult]::OK) {
+                    $dialog.FileName
+                }
+                "#
+            ])
+            .output()
+            .map_err(|e| format!("Failed to open file dialog: {}", e))?;
+
+        if output.status.success() {
+            let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
+            if path.is_empty() {
+                Ok(None)
+            } else {
+                Ok(Some(path))
+            }
+        } else {
+            Err("File dialog was cancelled or failed".to_string())
+        }
+    }
+
+    // 对于非Windows系统，返回错误
+    #[cfg(not(target_os = "windows"))]
+    {
+        Err("File browser is only supported on Windows".to_string())
+    }
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -610,6 +878,7 @@ fn main() {
             search_favorites,
             // 搜索引擎命令
             add_search_engine,
+            update_search_engine,
             get_all_engines,
             update_engine_status,
             delete_engine,
@@ -622,7 +891,12 @@ fn main() {
             update_llm_config,
             // 搜索设置命令
             get_search_settings,
-            update_search_settings
+            update_search_settings,
+            // 下载配置命令
+            get_download_config,
+            update_download_config,
+            open_magnet_link,
+            browse_for_file
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
