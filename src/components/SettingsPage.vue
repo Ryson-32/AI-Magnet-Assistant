@@ -61,7 +61,7 @@
               id="extractionModel"
               v-model="llmConfig.extraction_config.model"
               type="text"
-              placeholder="e.g., gemini-2.5-flash-lite-preview-06-17"
+              placeholder="e.g., gemini-2.5-flash"
               required
             />
           </div>
@@ -118,7 +118,7 @@
               id="analysisModel"
               v-model="llmConfig.analysis_config.model"
               type="text"
-              placeholder="e.g., gemini-2.5-flash-lite-preview-06-17"
+              placeholder="e.g., gemini-2.5-flash-lite"
               required
             />
           </div>
@@ -157,8 +157,8 @@
                   <tr>
                     <th>Model</th>
                     <th>Requests/min</th>
-                    <th>Requests/day</th>
                     <th>Tokens/min</th>
+                    <th>Requests/day</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -277,7 +277,7 @@
 import { ref, onMounted, watch, inject } from 'vue';
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir } from '@tauri-apps/api/path';
-import { openPath, revealItemInDir } from '@tauri-apps/plugin-opener';
+import { openPath } from '@tauri-apps/plugin-opener';
 
 // 注入全局通知函数
 const showNotification = inject('showNotification') as (message: string, type?: 'success' | 'error', duration?: number) => void;
@@ -287,13 +287,13 @@ const llmConfig = ref({
     provider: "gemini",
     api_key: "",
     api_base: "https://generativelanguage.googleapis.com",
-    model: "gemini-2.5-flash-lite-preview-06-17",
+    model: "gemini-2.5-flash",
   },
   analysis_config: {
     provider: "gemini",
     api_key: "",
     api_base: "https://generativelanguage.googleapis.com",
-    model: "gemini-2.5-flash-lite-preview-06-17",
+    model: "gemini-2.5-flash-lite",
     batch_size: 5,
   }
 });
@@ -312,7 +312,7 @@ onMounted(async () => {
 watch(() => llmConfig.value.extraction_config.provider, (newProvider) => {
   if (newProvider === 'gemini') {
     llmConfig.value.extraction_config.api_base = 'https://generativelanguage.googleapis.com';
-    llmConfig.value.extraction_config.model = 'gemini-2.5-flash-lite-preview-06-17';
+    llmConfig.value.extraction_config.model = 'gemini-2.5-flash';
   } else if (newProvider === 'openai') {
     llmConfig.value.extraction_config.api_base = 'https://api.openai.com/v1';
     llmConfig.value.extraction_config.model = 'gpt-3.5-turbo';
@@ -322,7 +322,7 @@ watch(() => llmConfig.value.extraction_config.provider, (newProvider) => {
 watch(() => llmConfig.value.analysis_config.provider, (newProvider) => {
   if (newProvider === 'gemini') {
     llmConfig.value.analysis_config.api_base = 'https://generativelanguage.googleapis.com';
-    llmConfig.value.analysis_config.model = 'gemini-2.5-flash-lite-preview-06-17';
+    llmConfig.value.analysis_config.model = 'gemini-2.5-flash-lite';
     // Keep existing batch_size or set default if not set
     if (!llmConfig.value.analysis_config.batch_size) {
       llmConfig.value.analysis_config.batch_size = 5;
@@ -423,17 +423,11 @@ function clearHideTimeout() {
 async function openConfigFolder() {
   const dir = await appDataDir();
   try {
-    // 尝试使用 revealItemInDir 来显示文件夹
-    await revealItemInDir(dir);
+    // 直接打开应用数据目录（com.ai-magnet-assistant.app 文件夹内部）
+    await openPath(dir);
   } catch (error) {
     console.error("Failed to open config folder:", error);
-    // 如果 revealItemInDir 失败，尝试使用 openPath
-    try {
-      await openPath(dir);
-    } catch (fallbackError) {
-      console.error("Fallback openPath also failed:", fallbackError);
-      showNotification(`Could not open folder: ${fallbackError}`, 'error');
-    }
+    showNotification(`Could not open folder: ${error}`, 'error');
   }
 }
 </script>
@@ -441,7 +435,7 @@ async function openConfigFolder() {
 <style scoped>
 .settings-page {
   padding: 24px;
-  max-width: 800px;
+  max-width: 1200px;
   margin: 0 auto;
 }
 

@@ -11,11 +11,10 @@
           v-model="keyword"
           placeholder="Enter search keyword..."
           @keyup.enter="search"
-          :disabled="isSearching"
           class="search-input"
         />
-        <button @click="search" :disabled="isSearching" class="search-btn">
-          {{ isSearching ? "Searching..." : "🔍 Search" }}
+        <button @click="search" class="search-btn">
+          {{ isSearching ? "🔍 Search" : "🔍 Search" }}
         </button>
       </div>
 
@@ -133,6 +132,9 @@ const sortBy = searchState ? computed({
   set: (val) => searchState.value.sortBy = val
 }) : ref('score');
 
+// 搜索取消机制
+let currentSearchId = 0;
+
 const titleMustContainKeyword = searchState ? computed({
   get: () => searchState.value.titleMustContainKeyword,
   set: (val) => searchState.value.titleMustContainKeyword = val
@@ -216,6 +218,12 @@ async function search() {
     return;
   }
 
+  // 生成新的搜索ID，取消之前的搜索
+  const searchId = ++currentSearchId;
+
+  // 检查搜索是否被取消的函数
+  const isSearchCancelled = () => currentSearchId !== searchId;
+
   isSearching.value = true;
   results.value = [];
 
@@ -254,6 +262,12 @@ async function search() {
     try {
       const clmclmResults = await clmclmPromise;
 
+      // 检查搜索是否被取消
+      if (isSearchCancelled()) {
+        console.log('Search cancelled after clmclm results');
+        return;
+      }
+
       // 立即显示clmclm结果
       if (clmclmResults && (clmclmResults as any[]).length > 0) {
         results.value = clmclmResults as any[];
@@ -263,6 +277,11 @@ async function search() {
         await sortResults(results.value);
 
         if (useSmartFilter.value && results.value.length > 0) {
+          // 再次检查搜索是否被取消
+          if (isSearchCancelled()) {
+            console.log('Search cancelled before clmclm analysis');
+            return;
+          }
           searchStatus.value = `Analyzing clmclm.com results, searching other engines...${modelInfo}`;
           await analyzeResults();
           await sortResults(results.value);
@@ -277,6 +296,12 @@ async function search() {
     try {
       const otherResults = await otherEnginesPromise;
 
+      // 检查搜索是否被取消
+      if (isSearchCancelled()) {
+        console.log('Search cancelled after other engines results');
+        return;
+      }
+
       // 合并其他引擎的结果
       if (otherResults && (otherResults as any[]).length > 0) {
         const allResults = [...results.value, ...(otherResults as any[])];
@@ -288,6 +313,11 @@ async function search() {
 
         // 如果启用了智能过滤，分析新增的结果
         if (useSmartFilter.value && (otherResults as any[]).length > 0) {
+          // 再次检查搜索是否被取消
+          if (isSearchCancelled()) {
+            console.log('Search cancelled before additional analysis');
+            return;
+          }
           searchStatus.value = `Analyzing additional results...${modelInfo}`;
           await analyzeResults();
           await sortResults(results.value);
@@ -295,6 +325,12 @@ async function search() {
       }
     } catch (error) {
       console.log('Other engines search failed:', error);
+    }
+
+    // 最终检查搜索是否被取消
+    if (isSearchCancelled()) {
+      console.log('Search cancelled before final status');
+      return;
     }
 
     // 最终状态 - 如果没有启用智能过滤或没有进行分析，显示基本搜索完成状态
@@ -307,7 +343,10 @@ async function search() {
     console.error("Search failed:", error);
     searchStatus.value = `Search failed: ${error}`;
   } finally {
-    isSearching.value = false;
+    // 只有当前搜索才能重置搜索状态
+    if (!isSearchCancelled()) {
+      isSearching.value = false;
+    }
   }
 }
 

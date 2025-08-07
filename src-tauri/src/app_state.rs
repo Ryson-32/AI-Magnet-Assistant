@@ -56,7 +56,7 @@ impl Default for SingleLlmConfig {
             provider: "gemini".to_string(),
             api_key: "".to_string(),
             api_base: "https://generativelanguage.googleapis.com".to_string(),
-            model: "gemini-2.5-flash-lite-preview-06-17".to_string(),
+            model: "gemini-2.5-flash".to_string(),
             batch_size: default_batch_size(),
         }
     }
@@ -72,8 +72,20 @@ pub struct LlmConfig {
 impl Default for LlmConfig {
     fn default() -> Self {
         Self {
-            extraction_config: SingleLlmConfig::default(),
-            analysis_config: SingleLlmConfig::default(),
+            extraction_config: SingleLlmConfig {
+                provider: "gemini".to_string(),
+                api_key: "".to_string(),
+                api_base: "https://generativelanguage.googleapis.com".to_string(),
+                model: "gemini-2.5-flash".to_string(),
+                batch_size: default_batch_size(),
+            },
+            analysis_config: SingleLlmConfig {
+                provider: "gemini".to_string(),
+                api_key: "".to_string(),
+                api_base: "https://generativelanguage.googleapis.com".to_string(),
+                model: "gemini-2.5-flash-lite".to_string(),
+                batch_size: default_batch_size(),
+            },
         }
     }
 }
