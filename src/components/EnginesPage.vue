@@ -51,11 +51,11 @@
                     ✏️
                   </button>
                   <button
-                    @click="deleteEngine(engine.id)"
-                    :class="['delete-btn', { 'confirm-delete': engine.id === pendingDeleteId }]"
-                    :title="engine.id === pendingDeleteId ? $t('pages.engines.engine.actions.confirmDelete') : $t('pages.engines.engine.actions.delete')"
+                    @click="confirmDelete(engine.id)"
+                    :class="getDeleteButtonClass(engine.id, 'delete-btn')"
+                    :title="getDeleteButtonTitle(engine.id, 'pages.engines.engine.actions.confirmDelete', 'pages.engines.engine.actions.delete')"
                   >
-                    {{ engine.id === pendingDeleteId ? '❓' : '🗑️' }}
+                    {{ getDeleteIcon(engine.id) }}
                   </button>
                 </div>
               </div>
@@ -231,6 +231,7 @@
 import { ref, onMounted, inject } from 'vue';
 import { invoke } from "@tauri-apps/api/core";
 import { useI18n } from '../composables/useI18n';
+import { useConfirmDelete } from '../composables/useConfirmDelete';
 
 // 注入全局通知函数
 const showNotification = inject('showNotification') as (message: string, type?: 'success' | 'error', duration?: number) => void;
@@ -247,8 +248,19 @@ interface SearchEngine {
 const engines = ref<SearchEngine[]>([]);
 const loading = ref(false);
 const isAdding = ref(false);
-const pendingDeleteId = ref<string | null>(null);
-const deleteTimeout = ref<any>(null);
+
+// 使用确认删除 composable
+const { confirmDelete, getDeleteIcon, getDeleteButtonClass, getDeleteButtonTitle } = useConfirmDelete(
+  async (id: string) => {
+    try {
+      await invoke("delete_engine", { id });
+      await loadEngines(); // 重新加载列表
+    } catch (error) {
+      console.error("Failed to delete engine:", error);
+      showNotification(t('pages.engines.messages.deleteFailed', { error: String(error) }), 'error');
+    }
+  }
+);
 
 // Edit engine related
 const editingEngineId = ref<string | null>(null);
@@ -300,26 +312,6 @@ async function toggleEngine(id: string, isEnabled: boolean) {
     showNotification(t('pages.engines.messages.updateStatusFailed', { error: String(error) }), 'error');
     // Reload to restore correct state
     await loadEngines();
-  }
-}
-
-async function deleteEngine(id: string) {
-  clearTimeout(deleteTimeout.value);
-
-  if (pendingDeleteId.value === id) {
-    try {
-      await invoke("delete_engine", { id });
-      await loadEngines(); // Reload the list
-      pendingDeleteId.value = null;
-    } catch (error) {
-      console.error("Failed to delete engine:", error);
-      showNotification(t('pages.engines.messages.deleteFailed', { error: String(error) }), 'error');
-    }
-  } else {
-    pendingDeleteId.value = id;
-    deleteTimeout.value = setTimeout(() => {
-      pendingDeleteId.value = null;
-    }, 3500);
   }
 }
 
@@ -823,6 +815,7 @@ async function saveEditEngine() {
 .switch input {
   opacity: 0;
   width: 0;
+  height: 0;
   height: 0;
 }
 

@@ -57,11 +57,11 @@
             📋
           </button>
           <button
-            @click="removeFavorite(favorite.id)"
-            :class="['remove-btn', { 'confirm-delete': favorite.id === pendingDeleteId }]"
-            :title="getRemoveButtonTitle(favorite.id)"
+            @click="confirmDelete(favorite.id)"
+            :class="getDeleteButtonClass(favorite.id, 'remove-btn')"
+            :title="getDeleteButtonTitle(favorite.id, 'pages.favorites.item.actions.confirmRemove', 'pages.favorites.item.actions.remove')"
           >
-            {{ favorite.id === pendingDeleteId ? '❓' : '🗑️' }}
+            {{ getDeleteIcon(favorite.id) }}
           </button>
         </div>
       </div>
@@ -73,6 +73,7 @@
 import { ref, onMounted, inject, watch, Ref } from 'vue';
 import { invoke } from "@tauri-apps/api/core";
 import { useI18n } from '../composables/useI18n';
+import { useConfirmDelete } from '../composables/useConfirmDelete';
 
 interface FavoriteItem {
   id: string;
@@ -87,19 +88,23 @@ const favorites = ref<FavoriteItem[]>([]);
 const displayedFavorites = ref<FavoriteItem[]>([]);
 const searchQuery = ref("");
 const loading = ref(false);
-const pendingDeleteId = ref<string | null>(null);
-const deleteTimeout = ref<any>(null);
 
 const { t } = useI18n();
 const showNotification = inject('showNotification') as (message: string, type?: 'success' | 'error', duration?: number) => void;
 const favoritesTimestamp = inject<Ref<number>>('favoritesTimestamp');
 
-// 计算删除按钮的标题
-const getRemoveButtonTitle = (favoriteId: string) => {
-  return favoriteId === pendingDeleteId.value 
-    ? t('pages.favorites.item.actions.confirmRemove')
-    : t('pages.favorites.item.actions.remove');
-};
+// 使用确认删除 composable
+const { confirmDelete, getDeleteIcon, getDeleteButtonClass, getDeleteButtonTitle } = useConfirmDelete(
+  async (id: string) => {
+    try {
+      await invoke("remove_from_favorites", { id });
+      await loadFavorites(); // 重新加载列表
+    } catch (error) {
+      console.error("Failed to remove favorite:", error);
+      showNotification(t('pages.favorites.messages.removeFailed', { error: String(error) }), 'error');
+    }
+  }
+);
 
 if (favoritesTimestamp) {
   watch(favoritesTimestamp, () => {
@@ -135,26 +140,6 @@ function searchFavorites() {
   displayedFavorites.value = favorites.value.filter(favorite =>
     favorite.title.toLowerCase().includes(query)
   );
-}
-
-async function removeFavorite(id: string) {
-  clearTimeout(deleteTimeout.value);
-
-  if (pendingDeleteId.value === id) {
-    try {
-      await invoke("remove_from_favorites", { id });
-      await loadFavorites(); // Reload the list
-      pendingDeleteId.value = null;
-    } catch (error) {
-      console.error("Failed to remove favorite:", error);
-      showNotification(t('pages.favorites.messages.removeFailed', { error: String(error) }), 'error');
-    }
-  } else {
-    pendingDeleteId.value = id;
-    deleteTimeout.value = setTimeout(() => {
-      pendingDeleteId.value = null;
-    }, 3500);
-  }
 }
 
 async function copyMagnetLink(magnetLink: string) {

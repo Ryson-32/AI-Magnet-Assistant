@@ -50,11 +50,11 @@
           </div>
           
           <button
-            @click="deleteKeyword(keyword.id)"
-            :class="['delete-btn', { 'confirm-delete': keyword.id === pendingDeleteId }]"
-            :title="keyword.id === pendingDeleteId ? $t('pages.priority.item.confirmDeleteTitle') : $t('pages.priority.item.deleteTitle')"
+            @click="confirmDelete(keyword.id)"
+            :class="getDeleteButtonClass(keyword.id, 'delete-btn')"
+            :title="getDeleteButtonTitle(keyword.id, 'pages.priority.item.confirmDeleteTitle', 'pages.priority.item.deleteTitle')"
           >
-            {{ keyword.id === pendingDeleteId ? '❓' : '✕' }}
+            {{ getDeleteIcon(keyword.id) }}
           </button>
         </div>
       </div>
@@ -88,6 +88,7 @@
 import { ref, onMounted, inject } from 'vue';
 import { invoke } from "@tauri-apps/api/core";
 import { useI18n } from '../composables/useI18n';
+import { useConfirmDelete } from '../composables/useConfirmDelete';
 
 interface PriorityKeyword {
   id: string;
@@ -98,11 +99,22 @@ const keywords = ref<PriorityKeyword[]>([]);
 const newKeyword = ref("");
 const loading = ref(false);
 const isAdding = ref(false);
-const pendingDeleteId = ref<string | null>(null);
-const deleteTimeout = ref<any>(null);
 
 const { t } = useI18n();
 const showNotification = inject('showNotification') as (message: string, type?: 'success' | 'error', duration?: number) => void;
+
+// 使用确认删除 composable
+const { confirmDelete, getDeleteIcon, getDeleteButtonClass, getDeleteButtonTitle } = useConfirmDelete(
+  async (id: string) => {
+    try {
+      await invoke("delete_priority_keyword", { id });
+      await loadKeywords(); // 重新加载列表
+    } catch (error) {
+      console.error("Failed to delete keyword:", error);
+      showNotification(t('pages.priority.messages.deleteFailed', { error: String(error) }), 'error');
+    }
+  }
+);
 
 onMounted(() => {
   loadKeywords();
@@ -144,26 +156,6 @@ async function addKeyword() {
     showNotification(t('pages.priority.messages.addFailed', { error: String(error) }), 'error');
   } finally {
     isAdding.value = false;
-  }
-}
-
-async function deleteKeyword(id: string) {
-  clearTimeout(deleteTimeout.value);
-
-  if (pendingDeleteId.value === id) {
-    try {
-      await invoke("delete_priority_keyword", { id });
-      await loadKeywords(); // Reload the list
-      pendingDeleteId.value = null;
-    } catch (error) {
-      console.error("Failed to delete keyword:", error);
-      showNotification(t('pages.priority.messages.deleteFailed', { error: String(error) }), 'error');
-    }
-  } else {
-    pendingDeleteId.value = id;
-    deleteTimeout.value = setTimeout(() => {
-      pendingDeleteId.value = null;
-    }, 3500);
   }
 }
 </script>

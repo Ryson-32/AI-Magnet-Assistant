@@ -535,22 +535,27 @@ async function openConfigFolder() {
   }
 }
 
-// 获取功能列表
-function getFeaturesList() {
-  const { t, locale } = useI18n()
+// 通用数组翻译辅助函数
+function getTranslatedArray(key: string, fallbackArray: string[]) {
+  const { t } = useI18n()
   
   try {
-    // 尝试直接访问翻译数据
-    const features = t('pages.settings.about.features.items');
-    if (Array.isArray(features)) {
-      return features;
+    const translatedArray = t(key);
+    if (Array.isArray(translatedArray)) {
+      return translatedArray;
     }
   } catch (error) {
-    console.warn('Error accessing features list:', error);
+    console.warn(`Error accessing ${key}:`, error);
   }
   
-  // 备选方案：硬编码的功能列表（临时解决方案）
-  return locale.value === 'zh-CN' ? [
+  return fallbackArray;
+}
+
+// 获取功能列表
+function getFeaturesList() {
+  const { locale } = useI18n()
+  
+  const fallbackFeatures = locale.value === 'zh-CN' ? [
     '多引擎搜索聚合',
     'AI驱动的内容分析和过滤',
     '可自定义搜索引擎',
@@ -565,23 +570,14 @@ function getFeaturesList() {
     'Favorites management',
     'Smart result ranking'
   ];
+  
+  return getTranslatedArray('pages.settings.about.features.items', fallbackFeatures);
 }
 
 // 获取技术栈列表
 function getTechStackList() {
-  const { t } = useI18n()
-  
-  try {
-    const techStack = t('pages.settings.about.techStack.badges');
-    if (Array.isArray(techStack)) {
-      return techStack;
-    }
-  } catch (error) {
-    console.warn('Error accessing tech stack list:', error);
-  }
-  
-  // 备选方案：硬编码的技术栈（临时解决方案）
-  return ['Tauri', 'Vue 3', 'Rust', 'TypeScript'];
+  const fallbackTechStack = ['Tauri', 'Vue 3', 'Rust', 'TypeScript'];
+  return getTranslatedArray('pages.settings.about.techStack.badges', fallbackTechStack);
 }
 </script>
 

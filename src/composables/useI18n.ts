@@ -32,8 +32,9 @@ export function useI18n() {
     } catch {
       return fallback
     }
-  }  
-  // HTML 内容翻译（保持换行）
+  }
+
+  // HTML内容翻译（保持换行）
   const translateHtml = (key: TranslationKey, params?: TranslationParams): string => {
     const translated = t(key, params || {}) as string
     return translated.replace(/\n/g, '<br/>')
@@ -108,12 +109,11 @@ export function useLocale() {
       // 5. 通知后端语言变更并持久化
       try {
         await invoke('set_app_locale_with_persistence', { locale: newLocale })
-        console.log(`Backend locale updated to: ${newLocale}`)
+        console.log(`📝 语言已切换到: ${newLocale}`)
       } catch (error) {
         console.warn('Failed to notify backend of locale change:', error)
       }
 
-      console.log(`Language switched to: ${newLocale}`)
     } catch (error) {
       console.error(`Failed to switch language to ${newLocale}:`, error)
     }
@@ -170,48 +170,6 @@ export function useLocale() {
 }
 
 /**
- * 错误消息翻译组合式函数
- */
-export function useErrorTranslation() {
-  const { t } = useI18n()
-
-  // 错误代码映射
-  const errorCodeMap = new Map([
-    ['ERR_SEARCH_NO_ENGINES', 'messages.errors.search_no_engines'],
-    ['ERR_SEARCH_TIMEOUT', 'messages.errors.search_timeout'],
-    ['ERR_SEARCH_FAILED', 'messages.errors.search_failed'],
-    ['ERR_FAVORITES_DUPLICATE', 'messages.errors.favorites_duplicate'],
-    ['ERR_FAVORITES_NOT_FOUND', 'messages.errors.favorites_not_found'],
-    ['ERR_ENGINE_NOT_FOUND', 'messages.errors.engine_not_found'],
-    ['ERR_NETWORK_ERROR', 'messages.errors.network_error'],
-    // 可以继续添加更多错误代码映射
-  ])
-
-  // 翻译错误消息
-  const translateError = (errorCode: string, params?: TranslationParams): string => {
-    const messageKey = errorCodeMap.get(errorCode) as TranslationKey
-
-    if (!messageKey) {
-      console.warn(`Unknown error code: ${errorCode}`)
-      return t('messages.errors.unknown', { code: errorCode })
-    }
-
-    return t(messageKey, params)
-  }
-  
-  // 翻译后端错误
-  const translateBackendError = (error: { code: string; params?: Record<string, any> }): string => {
-    return translateError(error.code, error.params)
-  }
-
-  return {
-    translateError,
-    translateBackendError,
-    errorCodeMap
-  }
-}
-
-/**
  * 格式化工具组合式函数
  */
 export function useFormatting() {
@@ -231,7 +189,7 @@ export function useFormatting() {
     return `${size.toFixed(2)} ${units[unitIndex]}`
   }
 
-  // 格式化相对时间序列
+  // 格式化相对时间
   const formatRelativeTime = (date: Date | string | number): string => {
     const targetDate = new Date(date)
     const now = new Date()
@@ -266,5 +224,5 @@ export function useFormatting() {
 
 // 监听语言变化，同步到全局状态
 watch(currentLocale, (newLocale) => {
-  console.log('Current locale changed to:', newLocale)
+  console.log('📝 语言设置已更新并持久化:', newLocale)
 }, { immediate: true })

@@ -207,7 +207,7 @@ impl ClmclmProvider {
 
                     // 如果没有解析到文件列表，使用基于标题的生成方法作为后备
                     if file_list.is_empty() {
-                        file_list = self.extract_file_list_from_magnet(&magnet_link, &title);
+                        file_list = self.extract_file_list_from_magnet(magnet_link, &title);
                     }
 
                     results.push(SearchResult {
@@ -854,11 +854,12 @@ impl SearchCore {
             for page in 1..=max_pages {
                 match clmclm.search(query, page).await {
                     Ok(mut results) => {
-                        println!("✅ clmclm.com page {} returned {} results", page, results.len());
+                        let count = results.len();
+                        println!("✅ clmclm.com page {page} returned {count} results");
                         all_results.append(&mut results);
                     }
                     Err(e) => {
-                        println!("❌ clmclm.com page {} failed: {}", page, e);
+                        println!("❌ clmclm.com page {page} failed: {e}");
                     }
                 }
             }
@@ -877,14 +878,15 @@ impl SearchCore {
                     let provider_name = provider.name().to_string();
 
                     let search_future = async move {
-                        println!("🔍 Searching {} page {} with provider: {}", query, page, provider_name);
+                        println!("🔍 Searching {query} page {page} with provider: {provider_name}");
                         match provider.search(&query, page).await {
                             Ok(results) => {
-                                println!("✅ Provider {} page {} returned {} results", provider_name, page, results.len());
+                                let count = results.len();
+                                println!("✅ Provider {provider_name} page {page} returned {count} results");
                                 Ok(results)
                             }
                             Err(e) => {
-                                println!("❌ Provider {} page {} failed: {}", provider_name, page, e);
+                                println!("❌ Provider {provider_name} page {page} failed: {e}");
                                 Err(e)
                             }
                         }
@@ -903,7 +905,7 @@ impl SearchCore {
                         all_results.append(&mut page_results);
                     }
                     Err(e) => {
-                        println!("⚠️ Search task failed: {}", e);
+                        println!("⚠️ Search task failed: {e}");
                         // 继续处理其他结果，不因为单个任务失败而中断
                     }
                 }
@@ -947,7 +949,7 @@ pub fn create_ai_enhanced_search_core(
         let llm_client: Arc<dyn LlmClient> = Arc::new(GeminiClient::new());
 
         for (name, url_template) in custom_engines {
-            println!("✅ Adding AI-enhanced custom provider: {}", name);
+            println!("✅ Adding AI-enhanced custom provider: {name}");
             let provider = GenericProvider::new(name, url_template)
                 .with_llm_client_and_config(llm_client.clone(), extract_config.clone())
                 .with_priority_keywords(priority_keywords.clone());
@@ -956,7 +958,7 @@ pub fn create_ai_enhanced_search_core(
     } else {
         // 如果没有LLM配置，创建基础的自定义提供商
         for (name, url_template) in custom_engines {
-            println!("✅ Adding basic custom provider: {}", name);
+            println!("✅ Adding basic custom provider: {name}");
             let provider = GenericProvider::new(name, url_template);
             providers.push(Arc::new(provider));
         }

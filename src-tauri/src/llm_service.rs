@@ -10,17 +10,16 @@ fn normalize_api_base(api_base: &str) -> String {
     // 移除末尾的斜杠，避免双斜杠问题
     let trimmed_base = api_base.trim_end_matches('/');
 
-    // 如果是官方Gemini域名且没有包含/v1beta，则自动添加
-    if trimmed_base == "https://generativelanguage.googleapis.com" {
-        format!("{trimmed_base}/v1beta")
-    } else if trimmed_base.starts_with("https://generativelanguage.googleapis.com") && !trimmed_base.contains("/v1beta") {
-        format!("{trimmed_base}/v1beta")
-    } else if (trimmed_base.starts_with("http://") || trimmed_base.starts_with("https://"))
-        && !trimmed_base.contains("/v1beta")
-        && !trimmed_base.contains("/api/")
-        && !trimmed_base.contains("/v1/") {
-        // 对于自定义代理服务器，如果没有包含API路径，尝试添加/v1beta
-        // 这适用于Gemini Balance等代理服务
+    // 如果未包含 /v1beta，针对官方域名与通用 http(s) 代理统一追加 /v1beta
+    if !trimmed_base.contains("/v1beta")
+        && (
+            trimmed_base == "https://generativelanguage.googleapis.com"
+                || trimmed_base.starts_with("https://generativelanguage.googleapis.com")
+                || ((trimmed_base.starts_with("http://") || trimmed_base.starts_with("https://"))
+                    && !trimmed_base.contains("/api/")
+                    && !trimmed_base.contains("/v1/"))
+        )
+    {
         format!("{trimmed_base}/v1beta")
     } else {
         // 对于其他URL（包括已经包含路径的自定义代理），保持原样但移除末尾斜杠
@@ -128,6 +127,12 @@ impl GeminiClient {
     pub fn new() -> Self {
         let client = Client::new();
         Self { client }
+    }
+}
+
+impl Default for GeminiClient {
+    fn default() -> Self {
+        Self::new()
     }
 }
 

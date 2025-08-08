@@ -40,6 +40,7 @@ pub enum ErrorCode {
 
 impl ErrorCode {
     /// 将错误代码转换为字符串标识
+    #[allow(dead_code)]
     pub fn to_code_string(&self) -> String {
         match self {
             ErrorCode::SearchNoEngines => "ERR_SEARCH_NO_ENGINES".to_string(),
@@ -88,6 +89,7 @@ pub struct FrontendError {
 
 impl ErrorCode {
     /// 转换为前端可用的错误格式
+    #[allow(dead_code)]
     pub fn to_frontend_error(&self) -> FrontendError {
         FrontendError {
             code: self.to_code_string(),
@@ -122,7 +124,7 @@ impl I18nManager {
         
         // 初始化时加载默认语言包
         if let Err(e) = manager.load_locale("en") {
-            eprintln!("警告: 无法加载默认语言包: {}", e);
+            eprintln!("警告: 无法加载默认语言包: {e}");
         }
         
         manager
@@ -163,7 +165,7 @@ impl I18nManager {
         let mut current_locale = self.current_locale.lock().unwrap();
         *current_locale = locale.to_string();
         
-        println!("📝 语言已切换到: {}", locale);
+        println!("📝 语言已切换到: {locale}");
         Ok(())
     }
     
@@ -214,7 +216,7 @@ impl I18nManager {
         match message {
             Some(msg) => self.substitute_params(msg, params),
             None => {
-                eprintln!("警告: 未找到翻译键 '{}' (语言: {})", key, locale);
+                eprintln!("警告: 未找到翻译键 '{key}' (语言: {locale})");
                 key.to_string()
             }
         }
@@ -228,7 +230,7 @@ impl I18nManager {
         
         let mut result = message.to_string();
         for (key, value) in params {
-            let placeholder = format!("{{{}}}", key);
+            let placeholder = format!("{{{key}}}");
             result = result.replace(&placeholder, value);
         }
         result
@@ -259,6 +261,12 @@ impl I18nManager {
     }
 }
 
+impl Default for I18nManager {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 /// 全局国际化管理器实例
 static I18N_MANAGER: Lazy<I18nManager> = Lazy::new(|| {
     let manager = I18nManager::new();
@@ -267,7 +275,7 @@ static I18N_MANAGER: Lazy<I18nManager> = Lazy::new(|| {
     if let Some(system_locale) = sys_locale::get_locale() {
         let locale = normalize_locale(&system_locale);
         if let Err(e) = manager.set_locale(&locale) {
-            eprintln!("警告: 无法设置系统语言 '{}': {}, 使用默认语言 'en'", locale, e);
+            eprintln!("警告: 无法设置系统语言 '{locale}': {e}, 使用默认语言 'en'");
         }
     }
     
@@ -289,11 +297,13 @@ pub fn get_i18n_manager() -> &'static I18nManager {
 }
 
 /// 便捷的翻译函数
+#[allow(dead_code)]
 pub fn t(key: &str) -> String {
     get_i18n_manager().translate(key, None)
 }
 
 /// 带参数的便捷翻译函数
+#[allow(dead_code)]
 pub fn t_with_params(key: &str, params: &HashMap<String, String>) -> String {
     get_i18n_manager().translate(key, Some(params))
 }

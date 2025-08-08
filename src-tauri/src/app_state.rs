@@ -202,7 +202,7 @@ impl AppStateManager {
         let data: AppData = match serde_json::from_str(&content) {
             Ok(data) => data,
             Err(e) => {
-                eprintln!("Failed to parse app data, using default: {}", e);
+                eprintln!("Failed to parse app data, using default: {e}");
                 // 如果解析失败，备份损坏的文件并使用默认数据
                 let backup_path = self.data_file_path.with_extension("json.backup");
                 let _ = fs::copy(&self.data_file_path, backup_path);

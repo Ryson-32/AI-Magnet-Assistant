@@ -468,15 +468,18 @@ async fn batch_analyze_resources(
 
     // 分批处理
     for (batch_index, chunk) in batch_items.chunks(batch_size).enumerate() {
-        println!("🔄 Frontend processing batch {}/{} ({} items)",
-                 batch_index + 1,
-                 (batch_items.len() + batch_size - 1) / batch_size,
-                 chunk.len());
+        use std::num::NonZeroUsize;
+        let Some(nz_batch) = NonZeroUsize::new(batch_size) else { continue };
+        println!(
+            "🔄 Frontend processing batch {}/{} ({} items)",
+            batch_index + 1,
+            batch_items.len().div_ceil(nz_batch.get()),
+            chunk.len()
+        );
 
         // 如果失败的批次太多，直接返回错误
         if failed_batches >= MAX_FAILED_BATCHES {
-            return Err(format!("Too many batch failures ({}/{}), aborting analysis",
-                              failed_batches, MAX_FAILED_BATCHES));
+            return Err(format!("Too many batch failures ({failed_batches}/{MAX_FAILED_BATCHES}), aborting analysis"));
         }
 
         match client.batch_analyze_multiple_items(chunk, &llm_config).await {
@@ -559,13 +562,13 @@ async fn batch_analyze_resources(
                                 }
                             }
                             Ok(Err(individual_error)) => {
-                                println!("⚠️ Individual analysis for '{}' failed: {}", item.title, individual_error);
+                println!("⚠️ Individual analysis for '{}' failed: {}", item.title, individual_error);
                                 all_results.push(create_analysis_result(
                                     original_result,
                                     None,
                                     50,
-                                    vec!["Individual Analysis Failed".to_string()],
-                                    Some(format!("Individual analysis failed: {}", individual_error)),
+                    vec!["Individual Analysis Failed".to_string()],
+                    Some(format!("Individual analysis failed: {individual_error}")),
                                 ));
                             }
                             Err(_timeout) => {
@@ -814,13 +817,13 @@ async fn create_and_open_magnet_html(magnet_link: &str, browser_path: &str, conf
 
     // 写入HTML文件
     fs::write(&html_file, html_content)
-        .map_err(|e| format!("Failed to create temporary HTML file: {}", e))?;
+        .map_err(|e| format!("Failed to create temporary HTML file: {e}"))?;
 
     // 使用115浏览器打开HTML文件
     let _output = Command::new(browser_path)
         .arg(html_file.to_string_lossy().as_ref())
         .spawn()
-        .map_err(|e| format!("Failed to launch 115 browser: {}", e))?;
+        .map_err(|e| format!("Failed to launch 115 browser: {e}"))?;
 
     // 等待一下让浏览器启动
     tokio::time::sleep(tokio::time::Duration::from_millis(500)).await;
@@ -844,7 +847,7 @@ async fn browse_for_file() -> Result<Option<String>, String> {
     #[cfg(target_os = "windows")]
     {
         let output = Command::new("powershell")
-            .args(&[
+            .args([
                 "-Command",
                 r#"
                 Add-Type -AssemblyName System.Windows.Forms
@@ -857,7 +860,7 @@ async fn browse_for_file() -> Result<Option<String>, String> {
                 "#
             ])
             .output()
-            .map_err(|e| format!("Failed to open file dialog: {}", e))?;
+            .map_err(|e| format!("Failed to open file dialog: {e}"))?;
 
         if output.status.success() {
             let path = String::from_utf8_lossy(&output.stdout).trim().to_string();
@@ -904,7 +907,7 @@ async fn set_app_locale_with_persistence(
     app_state::save_app_state(&app_handle, &state)
         .map_err(|e| e.to_string())?;
     
-    println!("📝 语言设置已更新并持久化: {}", locale);
+    println!("📝 语言设置已更新并持久化: {locale}");
     Ok(())
 }
 
