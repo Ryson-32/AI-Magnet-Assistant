@@ -39,10 +39,10 @@
           "urlExample1": "URL示例 1（搜索'test'，第1页）",
           "urlExample2": "URL示例 2（搜索'test'，第2页）",
           "placeholders": {
-            "engineName": "例如：1337x",
-            "urlTemplate": "例如：https://1337x.to/search/{keyword}/{page}/",
-            "urlExample1": "例如：https://example.com/search?q=test&page=1",
-            "urlExample2": "例如：https://example.com/search?q=test&page=2"
+            "engineName": "例如：ExampleBT",
+            "urlTemplate": "例如：https://examplebt.com/search/{keyword}/{page}/",
+            "urlExample1": "例如：https://examplebt.com/search?q=test&page=1",
+            "urlExample2": "例如：https://examplebt.com/search?q=test&page=2"
           },
           "helpText": {
             "advanced": "使用占位符直接输入URL模板：{keyword} 用于搜索词，{page} 用于基于1的分页。",
@@ -52,8 +52,10 @@
           },
           "examples": {
             "title": "示例：",
-            "example1": "https://1337x.to/search/{keyword}/{page}/ - 基于1的分页",
-            "example2": "https://torrentz2.eu/search?f={keyword}&p={page-1} - 基于0的分页"
+            "suffix1": "基于1的分页",
+            "suffix2": "基于0的分页",
+            "example1": "https://examplebt.com/search/{keyword}/{page}/ - 基于1的分页",
+            "example2": "https://examplebt.com/search?kw={keyword}&p={page-1} - 基于0的分页"
           }
         },
         "button": "添加引擎",
@@ -61,7 +63,8 @@
         "validation": {
           "fillAllFields": "请填写所有字段",
           "keywordRequired": "URL模板必须包含 {keyword} 占位符",
-          "pageRequired": "URL模板必须包含 {page} 或 {page-1} 占位符"
+          "pageRequired": "URL模板必须包含 {page} 或 {page-1} 占位符",
+          "requiredField": "请填写此字段。"
         }
       },
       "messages": {

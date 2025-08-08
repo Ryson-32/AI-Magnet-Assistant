@@ -80,6 +80,12 @@
           "openLocation": "打开文件位置"
         }
       },
+      "debug": {
+        "title": "调试",
+        "subtitle": "开发者工具与诊断",
+        "showDebugArea": "在设置页显示调试区域",
+        "showDebugAreaHelp": "控制是否在设置页顶部显示调试区域（包含语言切换等）"
+      },
       "language": {
         "title": "语言设置",
         "subtitle": "更改应用程序语言",
@@ -90,7 +96,7 @@
         "title": "关于",
         "appInfo": {
           "name": "AI 磁力助手",
-          "version": "版本 1.0.0",  
+          "version": "版本 1.2.0",  
           "description": "由AI驱动的智能磁力链接搜索与优化工具。"
         }, 
         "features": {

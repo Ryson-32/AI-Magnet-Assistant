@@ -147,6 +147,8 @@
               v-model="newEngine.name"
               type="text"
               :placeholder="$t('pages.engines.add.form.placeholders.engineName')"
+              @invalid="handleInvalid"
+              @input="handleInput"
               required
             />
           </div>
@@ -157,7 +159,9 @@
               id="urlTemplate"
               v-model="newEngine.urlTemplate"
               type="text"
-              :placeholder="$t('pages.engines.add.form.placeholders.urlTemplate')"
+              :placeholder="urlTemplatePlaceholder"
+              @invalid="handleInvalid"
+              @input="handleInput"
               required
             />
           </div>
@@ -165,8 +169,8 @@
           <div class="template-examples">
             <h4>{{ $t('pages.engines.add.form.examples.title') }}</h4>
             <ul>
-              <li><code>{{ $t('pages.engines.add.form.examples.example1') }}</code></li>
-              <li><code>{{ $t('pages.engines.add.form.examples.example2') }}</code></li>
+              <li><code>{{ example1Text }}</code></li>
+              <li><code>{{ example2Text }}</code></li>
             </ul>
           </div>
         </div>
@@ -228,14 +232,14 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, inject } from 'vue';
+import { ref, onMounted, inject, computed } from 'vue';
 import { invoke } from "@tauri-apps/api/core";
 import { useI18n } from '../composables/useI18n';
 import { useConfirmDelete } from '../composables/useConfirmDelete';
 
 // 注入全局通知函数
 const showNotification = inject('showNotification') as (message: string, type?: 'success' | 'error', duration?: number) => void;
-const { t } = useI18n();
+const { t, locale } = useI18n();
 
 interface SearchEngine {
   id: string;
@@ -281,6 +285,28 @@ const newEngine = ref({
   urlExample2: '',
   urlTemplate: ''
 });
+
+// ExampleBT 示例常量，避免 i18n 将 {keyword}/{page} 当作占位符吞掉
+const exampleDomain = 'examplebt.com'
+const L = '\u007B'
+const R = '\u007D'
+const urlTemplateExample = `https://${exampleDomain}/search/${L}keyword${R}/${L}page${R}/`
+const example1Text = computed(() => `${urlTemplateExample} - ${t('pages.engines.add.form.examples.suffix1')}`)
+const example2Text = computed(() => `https://${exampleDomain}/search?kw=${L}keyword${R}&p=${L}page-1${R} - ${t('pages.engines.add.form.examples.suffix2')}`)
+const urlTemplatePlaceholder = computed(() => {
+  const prefix = (locale?.value === 'zh-CN') ? '例如：' : 'e.g., '
+  return `${prefix}${urlTemplateExample}`
+})
+
+function handleInvalid(e: Event) {
+  const input = e.target as HTMLInputElement
+  input.setCustomValidity(t('pages.engines.add.validation.requiredField'))
+}
+
+function handleInput(e: Event) {
+  const input = e.target as HTMLInputElement
+  input.setCustomValidity('')
+}
 
 onMounted(() => {
   loadEngines();

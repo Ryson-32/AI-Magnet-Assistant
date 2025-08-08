@@ -77,6 +77,12 @@
         "current": "Current Language",
         "select": "Select Language"
       },
+      "debug": {
+        "title": "Debug",
+        "subtitle": "Developer utilities and diagnostics",
+        "showDebugArea": "Show Debug Area on Settings page",
+        "showDebugAreaHelp": "Toggles the debug area at the top of the Settings page (contains language switcher, etc.)"
+      },
       "data": {
         "title": "Data & Configuration",
         "subtitle": "Manage application data and configuration files",
@@ -90,7 +96,7 @@
         "title": "About",
         "appInfo": {
           "name": "🧲 AI Magnet Assistant",
-          "version": "Version 1.0.0",
+          "version": "Version 1.2.0",
           "description": "An intelligent magnet link search and optimization tool powered by AI."
         },
         "features": {

@@ -8,7 +8,8 @@
         "refresh": "Refresh"
       },
       "list": {
-        "title": "{count} Favorite{count, plural, one {} other {s}}",
+        "titleOne": "{count} Favorite",
+        "titleOther": "{count} Favorites",
         "loading": "Loading favorites...",
         "empty": "No favorites yet",
         "emptyMessage": "Start adding your favorite magnet links from search results!"

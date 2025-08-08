@@ -975,7 +975,7 @@ import SafeHtml from '@/components/base/SafeHtml.vue'
 import { useI18n } from '@/i18n/composables/useI18n'
 
 const { t } = useI18n()
-const appVersion = '1.0.0'
+const appVersion = '1.2.0'
 const authorName = 'AI Magnet Team'
 </script>
 ```
@@ -1258,6 +1258,6 @@ function checkTranslationCoverage() {
 
 ---
 
-*文档版本: 1.0.0*
+*文档版本: 1.2.0*
 *创建日期: 2025-01-07*
 *作者: AI Magnet Assistant Architecture Team*

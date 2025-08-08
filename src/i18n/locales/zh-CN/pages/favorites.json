@@ -9,6 +9,8 @@
       },
       "list": {
         "title": "{count} 个收藏",
+        "titleOne": "{count} 个收藏",
+        "titleOther": "{count} 个收藏",
         "loading": "加载收藏中...",
         "empty": "暂无收藏",
         "emptyMessage": "开始从搜索结果中添加您喜欢的磁力链接！"

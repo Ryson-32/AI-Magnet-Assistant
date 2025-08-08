@@ -181,8 +181,8 @@ panic = "abort"
 - ✅ 语言切换: 中英文切换功能正常
 
 ### 生成的安装包
-- `AI Magnet Assistant_1.1.0_x64_en-US.msi` - Windows MSI 安装包
-- `AI Magnet Assistant_1.1.0_x64-setup.exe` - NSIS 安装包
+- `AI Magnet Assistant_1.2.0_x64_en-US.msi` - Windows MSI 安装包
+- `AI Magnet Assistant_1.2.0_x64-setup.exe` - NSIS 安装包
 
 ## 项目文件统计
 
@@ -249,6 +249,6 @@ npm run tauri build
 ---
 
 **实施时间**: 2025年1月8日  
-**实施版本**: v1.1.0  
+**实施版本**: v1.2.0  
 **技术负责人**: AI Assistant  
 **状态**: ✅ 已完成并验证通过

@@ -2,7 +2,7 @@
 
 ## 1. Overall Project Architecture
 
-This project, **AI-Magnet-Assistant**, is a desktop application built on the **Tauri** framework. Tauri's core architecture allows for building the user interface with web frontend technologies (**Vue.js 3**) while leveraging a high-performance backend language (**Rust**) to handle core business logic.
+This project, **AI-Magnet-Assistant** (version 1.2.0), is a desktop application built on the **Tauri** framework. Tauri's core architecture allows for building the user interface with web frontend technologies (**Vue.js 3**) while leveraging a high-performance backend language (**Rust**) to handle core business logic.
 
 This architectural pattern offers the following key features:
 
@@ -120,11 +120,43 @@ const results = await invoke("search_clmclm_first", {
 ```
 This call will trigger the execution of the Rust backend's `search_clmclm_first` function and return the result to the frontend's `results` variable.
 ---
+
+## 6. Internationalization (i18n)
+
+- Frontend
+  - `src/i18n/index.ts`: i18n bootstrap. Preloads messages for all `SUPPORTED_LOCALES` and creates the Vue I18n instance in composition mode.
+  - `src/composables/useI18n.ts`: typed `t()` wrapper and `useLocale()` with `initializeLocale()`, `setLocale()`; persists selection to backend and `localStorage` and sets `<html lang>`.
+  - `src/components/LanguageSwitcher.vue`: language selector used in Settings and the Debug Area.
+- Backend
+  - `src-tauri/src/i18n.rs` with locale storage and message lookup.
+  - Tauri commands: `get_app_locale`, `set_app_locale_with_persistence`, plus error translation helpers used by other modules.
+- Flow
+  - On app mount, frontend calls `initializeLocale()` which first tries backend-persisted locale, then local storage, then browser preference.
+
+## 7. Application State & Persistence
+
+- File format: a single JSON `app_data.json` stored under Tauri's `app_data_dir()` (OS-specific path), managed by `AppStateManager` in `src-tauri/src/app_state.rs`.
+- Persisted domains: favorites, search engines, priority keywords, LLM configs, search settings, download config, and `current_locale`.
+- New in current codebase: `SearchSettings.show_debug_area` (default false) controls the Debug Area visibility.
+
+## 8. Debug Area
+
+- Implemented in `App.vue` as a banner shown only on the Settings page.
+- Visibility is controlled by `searchState.showDebugArea` which is persisted via `SearchSettings`.
+- Currently contains the `LanguageSwitcher` and is intended for developer-facing toggles and diagnostics.
+
+## 9. Download Handling
+
+- Backend command `open_magnet_link` checks `DownloadConfig`:
+  - If a custom application path is provided and detected as 115 Browser, it generates a temporary HTML (`create_and_open_magnet_html`) that triggers offline download and optionally auto-closes the window (configurable in Settings).
+  - Otherwise it opens the magnet URI directly, either with a specified app or the system default.
+
+---
 # AI-Magnet-Assistant - 软件架构设计文档 (Software Architecture Document)
 
 ## 1. 项目整体架构
 
-本项目 **AI-Magnet-Assistant** 是一个基于 **Tauri** 框架构建的桌面应用程序。Tauri 的核心架构允许使用 Web 前端技术（**Vue.js 3**）构建用户界面，同时利用高性能的后端语言（**Rust**）处理核心业务逻辑。
+本项目 **AI-Magnet-Assistant**（版本 1.2.0）是一个基于 **Tauri** 框架构建的桌面应用程序。Tauri 的核心架构允许使用 Web 前端技术（**Vue.js 3**）构建用户界面，同时利用高性能的后端语言（**Rust**）处理核心业务逻辑。
 
 此架构模式具备以下关键特性：
 
@@ -241,3 +273,35 @@ const results = await invoke("search_clmclm_first", {
 });
 ```
 此调用将触发 Rust 后端 `search_clmclm_first` 函数的执行，并将结果返回给前端的 `results` 变量。
+
+---
+
+## 6. 国际化（i18n）
+
+- 前端
+  - `src/i18n/index.ts`：i18n 启动逻辑，预加载所有 `SUPPORTED_LOCALES` 的消息，采用 Composition API 模式。
+  - `src/composables/useI18n.ts`：类型安全的 `t()` 与 `useLocale()`，提供 `initializeLocale()`、`setLocale()`；语言选择会持久化到后端和 `localStorage`，并同步 `<html lang>`。
+  - `src/components/LanguageSwitcher.vue`：语言选择器，应用于设置页和调试区域。
+- 后端
+  - `src-tauri/src/i18n.rs`：语言存储与消息查找。
+  - Tauri 命令：`get_app_locale`、`set_app_locale_with_persistence`，并提供在其他模块中使用的错误翻译工具。
+- 流程
+  - 应用挂载时调用 `initializeLocale()`：优先使用后端持久化语言，其次本地存储，最后浏览器偏好。
+
+## 7. 应用状态与持久化
+
+- 持久化文件：`app_data.json`，位于 Tauri 的 `app_data_dir()`（不同系统路径不同），由 `src-tauri/src/app_state.rs` 的 `AppStateManager` 管理。
+- 持久化内容：收藏夹、搜索引擎、优先关键词、LLM 配置、搜索设置、下载配置以及 `current_locale`。
+- 当前代码新增：`SearchSettings.show_debug_area`（默认 false）用于控制调试区域显示。
+
+## 8. 调试区域
+
+- 在 `App.vue` 中以横幅形式实现，仅在设置页显示。
+- 受 `searchState.showDebugArea` 控制，并通过 `SearchSettings` 持久化。
+- 目前包含 `LanguageSwitcher`，用于开发者开关与诊断用途。
+
+## 9. 下载处理
+
+- 后端命令 `open_magnet_link` 按 `DownloadConfig` 行为：
+  - 如配置了自定义程序且识别为 115 浏览器，则生成临时 HTML（`create_and_open_magnet_html`）触发离线下载，并可按设置自动关闭页面。
+  - 否则直接打开 magnet URI（优先指定程序，否则系统默认）。

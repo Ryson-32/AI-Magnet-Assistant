@@ -29,7 +29,12 @@
     <div class="keywords-list">
       <div class="section-header">
         <h2>{{ $t('pages.priority.list.title') }}</h2>
-        <span v-if="keywords.length > 0" class="keyword-count">{{ $t('pages.priority.list.count', { count: keywords.length }) }}</span>
+        <span v-if="keywords.length > 0" class="keyword-count">
+          {{ keywords.length === 1
+            ? $t('pages.priority.list.countOne', { count: keywords.length })
+            : $t('pages.priority.list.countOther', { count: keywords.length })
+          }}
+        </span>
       </div>
       
       <div v-if="loading" class="loading">

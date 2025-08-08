@@ -25,6 +25,7 @@ const searchState = ref({
   maxPages: 1,
   sortBy: 'score',
   titleMustContainKeyword: true,
+  showDebugArea: false,
 });
 
 // 提供搜索状态给子组件
@@ -48,6 +49,7 @@ onMounted(async () => {
       searchState.value.maxPages = savedSettings.max_pages ?? 1;
       searchState.value.sortBy = savedSettings.sort_by ?? 'score';
       searchState.value.titleMustContainKeyword = savedSettings.title_must_contain_keyword ?? true;
+      searchState.value.showDebugArea = savedSettings.show_debug_area ?? false;
     }
   } catch (error) {
     console.error('Failed to load app settings:', error);
@@ -61,6 +63,7 @@ watch(
     maxPages: searchState.value.maxPages,
     sortBy: searchState.value.sortBy,
     titleMustContainKeyword: searchState.value.titleMustContainKeyword,
+    showDebugArea: searchState.value.showDebugArea,
   }),
   async (newSettings) => {
     try {
@@ -70,6 +73,7 @@ watch(
           max_pages: newSettings.maxPages,
           sort_by: newSettings.sortBy,
           title_must_contain_keyword: newSettings.titleMustContainKeyword,
+          show_debug_area: newSettings.showDebugArea,
         }
       });
     } catch (error) {
@@ -114,8 +118,8 @@ provide('showNotification', showNotification);
     />
     
     <main class="main-content">
-      <!-- i18n 测试区域 - 在顶部显示 -->
-      <div v-if="currentPage === 'settings'" class="i18n-test-area">
+      <!-- 调试区域 - 在设置页顶部显示，可通过设置开关控制 -->
+      <div v-if="currentPage === 'settings' && searchState.showDebugArea" class="debug-area">
         <LanguageSwitcher />
       </div>
       
@@ -174,7 +178,7 @@ html, body {
   min-width: 0;
 }
 
-.i18n-test-area {
+.debug-area {
   background-color: #fff3cd;
   border: 2px solid #ffeaa7;
   border-radius: 8px;
@@ -182,8 +186,8 @@ html, body {
   padding: 10px;
 }
 
-.i18n-test-area::before {
-  content: "🌐 i18n 测试区域 / i18n Test Area";
+.debug-area::before {
+  content: "🛠️ 调试区域 / Debug Area";
   display: block;
   font-weight: bold;
   color: #856404;

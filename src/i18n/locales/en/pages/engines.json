@@ -39,10 +39,10 @@
           "urlExample1": "URL Example 1 (search for 'test', page 1)",
           "urlExample2": "URL Example 2 (search for 'test', page 2)",
           "placeholders": {
-            "engineName": "e.g., 1337x",
-            "urlTemplate": "e.g., https://1337x.to/search/{keyword}/{page}/",
-            "urlExample1": "e.g., https://example.com/search?q=test&page=1",
-            "urlExample2": "e.g., https://example.com/search?q=test&page=2"
+            "engineName": "e.g., ExampleBT",
+            "urlTemplate": "e.g., https://examplebt.com/search/{keyword}/{page}/",
+            "urlExample1": "e.g., https://examplebt.com/search?q=test&page=1",
+            "urlExample2": "e.g., https://examplebt.com/search?q=test&page=2"
           },
           "helpText": {
             "advanced": "Enter the URL template directly using placeholders: {keyword} for search terms and {page} for 1-based pagination.",
@@ -52,8 +52,10 @@
           },
           "examples": {
             "title": "Examples:",
-            "example1": "https://1337x.to/search/{keyword}/{page}/ - 1-based pagination",
-            "example2": "https://torrentz2.eu/search?f={keyword}&p={page-1} - 0-based pagination"
+            "suffix1": "1-based pagination",
+            "suffix2": "0-based pagination",
+            "example1": "https://examplebt.com/search/{keyword}/{page}/ - 1-based pagination",
+            "example2": "https://examplebt.com/search?kw={keyword}&p={page-1} - 0-based pagination"
           }
         },
         "button": "Add Engine",
@@ -61,7 +63,8 @@
         "validation": {
           "fillAllFields": "Please fill in all fields",
           "keywordRequired": "URL template must contain {keyword} placeholder",
-          "pageRequired": "URL template must contain {page} or {page-1} placeholder"
+          "pageRequired": "URL template must contain {page} or {page-1} placeholder",
+          "requiredField": "Please fill out this field."
         }
       },
       "messages": {

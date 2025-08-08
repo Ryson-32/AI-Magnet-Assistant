@@ -11,7 +11,8 @@
       },
       "list": {
         "title": "Current Priority Keywords",
-        "count": "{count} keyword{count, plural, one {} other {s}}",
+        "countOne": "{count} keyword",
+        "countOther": "{count} keywords",
         "loading": "Loading keywords...",
         "empty": "No priority keywords set",
         "emptyMessage": "Add keywords above to prioritize search results containing them!"

@@ -1,3 +1,47 @@
+# Version 1.2.0
+
+## English
+
+### ✨ Highlights
+- Full i18n for frontend and backend with runtime language switching and persistence
+- Settings page overhaul: two-phase AI configuration (Extraction/Analysis), API connectivity tests, rate-limit tooltip, download handler options
+- Debug Area with a user-controlled toggle (off by default)
+- Improved search and analysis: batch analysis with parallel execution and graceful fallback, better progress states, and priority-keyword boosting
+- UI polish: larger fonts for Chinese locale in side navigation and Settings title
+
+### 🔧 Developer & Architecture
+- Consolidated SearchCore creation and providers
+- Introduced backend i18n module and locale commands; app state persisted to app_data.json
+- Added `show_debug_area` to `SearchSettings` with serde default for backward compatibility
+- New docs: Architecture, I18N design, and implementation reports
+
+### 📦 Misc
+- Vite/Tauri config tweaks, new setup script under `run/`
+- `.gitignore` updates, ignoring `memory_bank/` and `private_docs/`
+
+---
+
+## 简体中文
+
+### ✨ 亮点
+- 前后端完整国际化，运行时语言切换并持久化
+- 设置页重构：AI 提取/分析双阶段配置、API 连通性测试、速率限制浮窗、下载处理选项
+- 新增“调试区域”且提供用户开关（默认关闭）
+- 搜索与分析提升：并行/分批分析与优雅回退、进度状态优化、优先关键词结果置顶
+- UI 优化：中文下左侧导航与“设置”标题字号提升
+
+### 🔧 架构与开发
+- 统一 SearchCore 创建与提供者管理
+- 新增后端 i18n 模块与语言命令；应用状态持久化至 app_data.json
+- `SearchSettings` 新增 `show_debug_area`（serde 默认值，兼容旧数据）
+- 新增架构与国际化设计/落地报告等文档
+
+### 📦 其他
+- 调整 Vite/Tauri 配置，新增 `run/setup.sh`
+- 更新 `.gitignore`，忽略 `memory_bank/` 与 `private_docs/`
+
+---
+
 # Version 1.1.0
 
 ## English

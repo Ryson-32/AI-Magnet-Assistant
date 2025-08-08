@@ -1,5 +1,5 @@
 <template>
-  <div class="settings-page">
+  <div class="settings-page" :class="{ 'cn-locale': isZhCN }">
     <div class="page-header">
       <h1>{{ $t('pages.settings.title') }}</h1>
       <p>{{ $t('pages.settings.subtitle') }}</p>
@@ -9,6 +9,8 @@
     <div class="settings-section">
       <LanguageSwitcher />
     </div>
+
+    
 
     <div class="settings-section">
       <div class="section-header">
@@ -40,7 +42,7 @@
                 :placeholder="$t('pages.settings.ai.extraction.placeholders.apiKey')"
                 required />
               <button type="button" @click="testExtractionConnection" class="test-btn" :disabled="isTestingExtraction">
-                {{ $t('pages.settings.ai.extraction.testing') }}
+                {{ isTestingExtraction ? $t('pages.settings.ai.extraction.testing') : $t('pages.settings.ai.extraction.test') }}
               </button>
             </div>
             <small class="help-text">{{ $t('pages.settings.ai.extraction.helpText') }}</small>
@@ -94,7 +96,7 @@
                 :placeholder="$t('pages.settings.ai.analysis.placeholders.apiKey')"
                 required />
               <button type="button" @click="testAnalysisConnection" class="test-btn" :disabled="isTestingAnalysis">
-                {{ $t('pages.settings.ai.analysis.testing') }}
+                {{ isTestingAnalysis ? $t('pages.settings.ai.analysis.testing') : $t('pages.settings.ai.analysis.test') }}
               </button>
             </div>
             <small class="help-text">{{ $t('pages.settings.ai.analysis.helpText') }}</small>
@@ -320,11 +322,35 @@
         </div>
       </div>
     </div>
+
+    <!-- 调试与诊断（移动到页面最后） -->
+    <div class="settings-section">
+      <div class="section-header">
+        <h2>{{ $t('pages.settings.debug.title') }}</h2>
+        <p>{{ $t('pages.settings.debug.subtitle') }}</p>
+      </div>
+
+      <div class="settings-form">
+        <div class="form-group">
+          <div class="checkbox-container">
+            <label class="checkbox-only">
+              <input
+                type="checkbox"
+                v-model="showDebugArea"
+              />
+              <span class="checkmark"></span>
+            </label>
+            <span class="checkbox-text">{{ $t('pages.settings.debug.showDebugArea') }}</span>
+          </div>
+          <small class="help-text">{{ $t('pages.settings.debug.showDebugAreaHelp') }}</small>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted, watch, inject } from 'vue';
+import { ref, onMounted, watch, inject, computed } from 'vue';
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir } from '@tauri-apps/api/path';
 import { openPath } from '@tauri-apps/plugin-opener';
@@ -333,7 +359,21 @@ import LanguageSwitcher from './LanguageSwitcher.vue';
 
 // 注入全局通知函数
 const showNotification = inject('showNotification') as (message: string, type?: 'success' | 'error', duration?: number) => void;
-const { t } = useI18n();
+const { t, locale } = useI18n();
+
+// 全局搜索/应用状态（含调试区域开关）
+const injectedSearchState = inject('searchState') as any;
+const showDebugArea = computed<boolean>({
+  get: () => injectedSearchState?.value?.showDebugArea ?? false,
+  set: (val: boolean) => {
+    if (injectedSearchState?.value) {
+      injectedSearchState.value.showDebugArea = val;
+    }
+  }
+});
+
+// 是否中文
+const isZhCN = computed(() => locale.value === 'zh-CN')
 
 const llmConfig = ref({
   extraction_config: {
@@ -597,6 +637,11 @@ function getTechStackList() {
   font-size: 32px;
   font-weight: 700;
   color: #1a202c;
+}
+
+/* 中文界面下，“设置”标题更大一些 */
+.cn-locale .page-header h1 {
+  font-size: 36px;
 }
 
 .page-header p {

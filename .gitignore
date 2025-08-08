@@ -123,7 +123,7 @@ src-tauri/gen/
 
 # Custom Ignores for Private Content
 
-#/memory_bank/
+/memory_bank/
 /private_docs/
 
 # Local build/test artifacts

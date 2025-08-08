@@ -98,6 +98,9 @@ pub struct SearchSettings {
     pub max_pages: u32,
     pub sort_by: String,
     pub title_must_contain_keyword: bool,
+    /// 是否显示调试区域（设置页顶部）
+    #[serde(default)]
+    pub show_debug_area: bool,
 }
 
 impl Default for SearchSettings {
@@ -107,6 +110,7 @@ impl Default for SearchSettings {
             max_pages: 1,
             sort_by: "score".to_string(),
             title_must_contain_keyword: true,
+            show_debug_area: false,
         }
     }
 }
@@ -161,7 +165,7 @@ impl Default for AppData {
             search_settings: SearchSettings::default(),
             download_config: DownloadConfig::default(),
             current_locale: "en".to_string(), // 默认英文
-            version: "1.0.0".to_string(),
+            version: "1.2.0".to_string(),
         }
     }
 }

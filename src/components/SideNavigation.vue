@@ -1,5 +1,5 @@
 <template>
-  <div class="side-navigation">
+  <div class="side-navigation" :class="{ 'cn-locale': isZhCN }">
     <div class="nav-header">
       <h2 class="app-title">
         <div class="app-icon">🧲</div>
@@ -38,6 +38,8 @@
 
 <script setup lang="ts">
 import type { PropType } from 'vue'
+import { computed } from 'vue'
+import { useI18n } from '../composables/useI18n'
 
 // 导航项配置
 const menuItems = [
@@ -59,6 +61,10 @@ defineProps({
 defineEmits<{
   navigate: [page: string]
 }>()
+
+// 根据当前语言判断是否为中文
+const { locale } = useI18n()
+const isZhCN = computed(() => locale.value === 'zh-CN')
 </script>
 
 <style scoped>
@@ -154,6 +160,11 @@ defineEmits<{
   .nav-label {
     font-size: 14px;
     font-weight: 500;
+  }
+
+  /* 中文界面下，左侧导航字体更大一些 */
+  .cn-locale .nav-label {
+    font-size: 16px;
   }
 
   .nav-footer {

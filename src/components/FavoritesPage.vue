@@ -31,7 +31,12 @@
 
     <div v-else class="favorites-list">
       <div class="favorites-header">
-        <h2>{{ $t('pages.favorites.list.title', { count: displayedFavorites.length }) }}</h2>
+        <h2>
+          {{ displayedFavorites.length === 1
+            ? $t('pages.favorites.list.titleOne', { count: displayedFavorites.length })
+            : $t('pages.favorites.list.titleOther', { count: displayedFavorites.length })
+          }}
+        </h2>
       </div>
       
       <div v-for="favorite in displayedFavorites" :key="favorite.id" class="favorite-item">
@@ -154,10 +159,13 @@ async function copyMagnetLink(magnetLink: string) {
 
 function formatDate(dateString: string): string {
   try {
-    const date = new Date(dateString);
-    return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    const date = new Date(dateString)
+    const lang = (document?.documentElement?.lang || navigator.language || 'en').toString()
+    const datePart = date.toLocaleDateString(lang, { year: 'numeric', month: 'short', day: '2-digit' })
+    const timePart = date.toLocaleTimeString(lang, { hour: '2-digit', minute: '2-digit' })
+    return `${datePart} ${timePart}`
   } catch {
-    return dateString;
+    return dateString
   }
 }
 </script>

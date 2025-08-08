@@ -134,7 +134,10 @@ const maxPages = searchState ? computed({
 
 const sortBy = searchState ? computed({
   get: () => searchState.value.sortBy,
-  set: (val) => searchState.value.sortBy = val
+  set: (val) => {
+    searchState.value.sortBy = val
+    try { localStorage.setItem('search-sort-by', String(val)) } catch {}
+  }
 }) : ref('score');
 
 // 搜索取消机制
@@ -219,6 +222,13 @@ async function onSortChange() {
 }
 
 async function search() {
+  // 初始化 sortBy（首次进入页面或无状态时从本地存储恢复）
+  if (!searchState && typeof window !== 'undefined') {
+    const saved = localStorage.getItem('search-sort-by')
+    if (saved === 'score' || saved === 'size') {
+      ;(sortBy as any).value = saved
+    }
+  }
   if (!keyword.value.trim()) {
     alert(t('pages.home.messages.emptyKeyword'));
     return;

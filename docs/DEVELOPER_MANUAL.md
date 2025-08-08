@@ -54,7 +54,13 @@ To start the development server with hot-reloading, run:
 ```bash
 npm run dev
 ```
-This will start both the frontend development server and the backend Tauri application.
+This will start both the frontend development server and the backend Tauri application. Current app version: 1.2.0.
+
+For UI-only development, you can run the Vite dev server without launching Tauri:
+
+```bash
+npm run vite:dev
+```
 
 ### 4.2. Production Build
 
@@ -64,6 +70,12 @@ To build the final, distributable desktop application, run:
 npm run tauri build
 ```
 After a successful build, the executable or installer will be located in the `src-tauri/target/release/` directory.
+
+### 4.3. Internationalization Development Notes
+
+- Add or modify locale messages under `src/i18n/locales/<locale>/`.
+- Frontend i18n is preloaded; no dynamic import race conditions.
+- Use `useLocale().setLocale()` to switch languages at runtime; the backend will persist the selection.
 
 ---
 Thank you for your contribution!
@@ -124,7 +136,13 @@ Thank you for your contribution!
 ```bash
 npm run dev
 ```
-这将同时启动前端开发服务器和后端Tauri应用。
+这将同时启动前端开发服务器和后端Tauri应用。当前应用版本：1.2.0。
+
+仅进行前端 UI 开发时，可单独启动 Vite：
+
+```bash
+npm run vite:dev
+```
 
 ### 4.2. 生产构建
 
@@ -134,6 +152,12 @@ npm run dev
 npm run tauri build
 ```
 构建成功后，可执行文件或安装包将位于 `src-tauri/target/release/` 目录下。
+
+### 4.3. 国际化开发注意事项
+
+- 在 `src/i18n/locales/<locale>/` 下新增或修改文案。
+- 前端 i18n 采用预加载，避免动态加载时序问题。
+- 通过 `useLocale().setLocale()` 进行运行时切换；后端会持久化语言选择。
 
 ---
 感谢您的贡献！
