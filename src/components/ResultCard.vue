@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { invoke } from "@tauri-apps/api/core";
+import { useI18n } from '../composables/useI18n';
 
 interface Props {
   title?: string;
@@ -20,6 +21,8 @@ const emit = defineEmits<{
   addToFavorites: [result: any];
   showNotification: [message: string, type?: 'success' | 'error'];
 }>();
+
+const { t } = useI18n();
 
 const showFullLink = ref(false);
 const copied = ref(false);
@@ -92,10 +95,10 @@ async function quickDownload(magnetLink: string | undefined) {
   try {
     await invoke("open_magnet_link", { magnetLink });
     console.log("Magnet link opened successfully");
-    emit('showNotification', 'Download started successfully!', 'success');
+    emit('showNotification', t('components.resultCard.messages.downloadStarted'), 'success');
   } catch (error) {
     console.error("Failed to open magnet link:", error);
-    emit('showNotification', `Failed to start download: ${error}`, 'error');
+    emit('showNotification', t('components.resultCard.messages.downloadFailed', { error: String(error) }), 'error');
   } finally {
     isDownloading.value = false;
   }
@@ -110,13 +113,13 @@ async function quickDownload(magnetLink: string | undefined) {
         <div class="title-row">
           <div class="title-wrapper">
             <h3 class="title" :title="originalTitle || title">{{ title }}</h3>
-            <span v-if="isPriority" class="priority-badge">📌 Priority</span>
+            <span v-if="isPriority" class="priority-badge">📌 {{ $t('components.resultCard.priority') }}</span>
           </div>
           <div class="actions">
-            <button v-if="sourceUrl" @click="openSourceUrl" class="action-btn" title="Go to source URL">
+            <button v-if="sourceUrl" @click="openSourceUrl" class="action-btn" :title="$t('components.resultCard.actions.goToSource')">
               🔗
             </button>
-            <button @click="addToFavorites" class="favorite-btn" title="Add to favorites">
+            <button @click="addToFavorites" class="favorite-btn" :title="$t('components.resultCard.actions.addToFavorites')">
               ⭐
             </button>
           </div>
@@ -126,7 +129,7 @@ async function quickDownload(magnetLink: string | undefined) {
             <span v-if="fileSize" class="file-size">📁 {{ fileSize }}</span>
             <span v-if="uploadDate" class="upload-date">📅 {{ uploadDate }}</span>
             <span v-if="analysis && analysis.purity_score" class="purity-score">
-              🎯 Score: {{ analysis.purity_score }}
+              🎯 {{ $t('components.resultCard.analysis.score') }}: {{ analysis.purity_score }}
             </span>
             <span v-if="analysis && analysis.tags && analysis.tags.length > 0" class="tags-item">
               🏷️ {{ analysis.tags.join(', ') }}
@@ -149,7 +152,7 @@ async function quickDownload(magnetLink: string | undefined) {
           <div class="file-name">{{ file }}</div>
         </div>
         <div v-if="fileList.length > 7" class="more-files" :title="remainingFilesTooltip">
-          +{{ fileList.length - 7 }} more files
+          {{ $t('components.resultCard.fileList.moreFiles', { count: fileList.length - 7 }) }}
         </div>
       </div>
     </div>
@@ -159,14 +162,14 @@ async function quickDownload(magnetLink: string | undefined) {
         <div class="magnet-link" @click="toggleLinkDisplay">
           <code>{{ getDisplayLink(magnetLink) }}</code>
           <span v-if="magnetLink && magnetLink.length > 60" class="toggle-hint">
-            {{ showFullLink ? 'Click to collapse' : 'Click to expand' }}
+            {{ showFullLink ? $t('components.resultCard.fileList.collapseHint') : $t('components.resultCard.fileList.expandHint') }}
           </span>
         </div>
         <button
           @click="copyToClipboard(magnetLink)"
           class="copy-btn-icon"
           :class="{ 'copied': copied }"
-          :title="copied ? 'Copied!' : 'Copy magnet link'"
+          :title="copied ? $t('components.resultCard.actions.copied') : $t('components.resultCard.actions.copyMagnetLink')"
         >
           {{ copied ? '✓' : '📋' }}
         </button>
@@ -175,7 +178,7 @@ async function quickDownload(magnetLink: string | undefined) {
           @click="quickDownload(magnetLink)"
           class="quick-download-btn"
           :class="{ 'downloading': isDownloading }"
-          :title="isDownloading ? 'Opening...' : 'Quick download'"
+          :title="isDownloading ? $t('components.resultCard.actions.opening') : $t('components.resultCard.actions.quickDownload')"
           :disabled="isDownloading"
         >
           {{ isDownloading ? '⏳' : '⬇️' }}

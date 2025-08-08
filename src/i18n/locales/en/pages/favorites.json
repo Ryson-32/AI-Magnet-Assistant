@@ -1,0 +1,36 @@
+{
+  "pages": {
+    "favorites": {
+      "title": "Favorites",
+      "subtitle": "Your saved magnet links",
+      "search": {
+        "placeholder": "Search in favorites...",
+        "refresh": "Refresh"
+      },
+      "list": {
+        "title": "{count} Favorite{count, plural, one {} other {s}}",
+        "loading": "Loading favorites...",
+        "empty": "No favorites yet",
+        "emptyMessage": "Start adding your favorite magnet links from search results!"
+      },
+      "item": {
+        "fileSize": "File Size",
+        "created": "Added",
+        "files": "Files",
+        "filesCount": "Files ({count})",
+        "moreFiles": "... and {count} more",
+        "actions": {
+          "copy": "Copy magnet link",
+          "remove": "Remove from favorites",
+          "confirmRemove": "Confirm deletion"
+        }
+      },
+      "messages": {
+        "loadFailed": "Failed to load favorites: {error}",
+        "removeFailed": "Failed to remove favorite: {error}",
+        "copied": "Magnet link copied to clipboard!",
+        "copyFailed": "Failed to copy magnet link"
+      }
+    }
+  }
+}

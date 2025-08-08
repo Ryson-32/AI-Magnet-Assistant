@@ -1,0 +1,29 @@
+{
+  "errors": {
+    "search_no_engines": "No search engines available for this operation.",
+    "search_timeout": "Search request timed out. Please try again.",
+    "search_failed": "Search operation failed: {details}",
+    "favorites_duplicate": "This item is already in your favorites.",
+    "favorites_not_found": "Favorite item not found.",
+    "favorites_quota_exceeded": "Favorites storage limit exceeded.",
+    "engine_not_found": "Search engine not found.",
+    "engine_not_deletable": "Cannot delete the default search engine.",
+    "engine_invalid": "Invalid search engine configuration.",
+    "system_io_error": "File system operation failed.",
+    "system_permission_denied": "Permission denied for this operation.",
+    "system_network_error": "Network connection error.",
+    "ai_service_unavailable": "AI service is currently unavailable.",
+    "ai_service_quota_exceeded": "AI service quota has been exceeded.",
+    "ai_service_invalid_key": "Invalid AI service API key.",
+    "unknown_error": "An unknown error occurred: {code}"
+  },
+  "system": {
+    "app_starting": "Application is starting...",
+    "app_ready": "Application is ready.",
+    "update_available": "A new version is available.",
+    "locale_changed": "Language has been changed to {locale}.",
+    "locale_invalid": "Invalid locale: {locale}",
+    "config_saved": "Configuration saved successfully.",
+    "config_load_failed": "Failed to load configuration."
+  }
+}

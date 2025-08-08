@@ -1,0 +1,54 @@
+{
+  "messages": {
+    "errors": {
+      "search_no_engines": "No search engines available for this operation.",
+      "search_timeout": "Search operation timed out. Please try again.",
+      "search_failed": "Search failed: {reason}",
+      "search_network_error": "Network error during search. Please check your connection.",
+      "favorites_duplicate": "This item is already in your favorites.",
+      "favorites_not_found": "Favorite item not found.",
+      "favorites_quota_exceeded": "Maximum number of favorites reached.",
+      "favorites_save_failed": "Failed to save to favorites.",
+      "engine_not_found": "Search engine not found.",
+      "engine_not_deletable": "Cannot delete the default search engine.",
+      "engine_invalid": "Invalid search engine configuration.",
+      "engine_add_failed": "Failed to add search engine.",
+      "system_io_error": "File system error occurred.",
+      "system_permission_denied": "Permission denied.",
+      "system_network_error": "Network connection error.",
+      "system_unknown_error": "An unknown error occurred.",
+      "ai_service_unavailable": "AI service is currently unavailable.",
+      "ai_service_quota_exceeded": "AI service quota exceeded.",
+      "ai_service_invalid_key": "Invalid AI service key.",
+      "ai_service_timeout": "AI service request timed out.",
+      "unknown": "Unknown error: {code}",
+      "network_error": "Network connection failed.",
+      "timeout_error": "Operation timed out.",
+      "permission_denied": "Access denied."
+    },
+    "success": {
+      "search_completed": "Search completed successfully.",
+      "favorites_added": "Added to favorites.",
+      "favorites_removed": "Removed from favorites.",
+      "engine_added": "Search engine added successfully.",
+      "engine_updated": "Search engine updated successfully.",
+      "engine_deleted": "Search engine deleted successfully.",
+      "settings_saved": "Settings saved successfully.",
+      "cache_cleared": "Cache cleared successfully."
+    },
+    "warnings": {
+      "search_partial_results": "Some search engines returned incomplete results.",
+      "engine_slow_response": "Some search engines are responding slowly.",
+      "favorites_limit_approaching": "Approaching favorites limit ({current}/{max}).",
+      "cache_full": "Cache is nearly full. Consider clearing it.",
+      "update_available": "A new version is available for download."
+    },
+    "info": {
+      "search_started": "Search started...",
+      "analyzing_results": "Analyzing search results...",
+      "loading_favorites": "Loading favorites...",
+      "checking_updates": "Checking for updates...",
+      "cache_cleared": "Cache has been cleared."
+    }
+  }
+}

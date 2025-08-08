@@ -1,37 +1,37 @@
 <template>
   <div class="favorites-page">
     <div class="page-header">
-      <h1>Favorites</h1>
-      <p>Your saved magnet links</p>
+      <h1>{{ $t('pages.favorites.title') }}</h1>
+      <p>{{ $t('pages.favorites.subtitle') }}</p>
     </div>
 
     <div class="search-section">
       <div class="search-row">
         <input
           v-model="searchQuery"
-          placeholder="Search in favorites..."
+          :placeholder="$t('pages.favorites.search.placeholder')"
           @input="searchFavorites"
           class="search-input"
         />
         <button @click="loadFavorites" class="refresh-btn">
-          🔄 Refresh
+          🔄 {{ $t('pages.favorites.search.refresh') }}
         </button>
       </div>
     </div>
 
     <div v-if="loading" class="loading">
-      Loading favorites...
+      {{ $t('pages.favorites.list.loading') }}
     </div>
 
     <div v-else-if="displayedFavorites.length === 0" class="empty-state">
       <div class="empty-icon">⭐</div>
-      <h3>No favorites yet</h3>
-      <p>Start adding your favorite magnet links from search results!</p>
+      <h3>{{ $t('pages.favorites.list.empty') }}</h3>
+      <p>{{ $t('pages.favorites.list.emptyMessage') }}</p>
     </div>
 
     <div v-else class="favorites-list">
       <div class="favorites-header">
-        <h2>{{ displayedFavorites.length }} Favorite{{ displayedFavorites.length !== 1 ? 's' : '' }}</h2>
+        <h2>{{ $t('pages.favorites.list.title', { count: displayedFavorites.length }) }}</h2>
       </div>
       
       <div v-for="favorite in displayedFavorites" :key="favorite.id" class="favorite-item">
@@ -39,27 +39,27 @@
           <div class="favorite-title">{{ favorite.title }}</div>
           <div class="favorite-meta">
             <span v-if="favorite.file_size" class="file-size">{{ favorite.file_size }}</span>
-            <span class="created-date">Added: {{ formatDate(favorite.created_at) }}</span>
+            <span class="created-date">{{ $t('pages.favorites.item.created') }}: {{ formatDate(favorite.created_at) }}</span>
           </div>
           <div v-if="favorite.file_list && favorite.file_list.length > 0" class="file-list">
             <details>
-              <summary>Files ({{ favorite.file_list.length }})</summary>
+              <summary>{{ $t('pages.favorites.item.filesCount', { count: favorite.file_list.length }) }}</summary>
               <ul>
                 <li v-for="file in favorite.file_list.slice(0, 10)" :key="file">{{ file }}</li>
-                <li v-if="favorite.file_list.length > 10">... and {{ favorite.file_list.length - 10 }} more</li>
+                <li v-if="favorite.file_list.length > 10">{{ $t('pages.favorites.item.moreFiles', { count: favorite.file_list.length - 10 }) }}</li>
               </ul>
             </details>
           </div>
         </div>
         
         <div class="favorite-actions">
-          <button @click="copyMagnetLink(favorite.magnet_link)" class="copy-btn" title="Copy magnet link">
+          <button @click="copyMagnetLink(favorite.magnet_link)" class="copy-btn" :title="$t('pages.favorites.item.actions.copy')">
             📋
           </button>
           <button
             @click="removeFavorite(favorite.id)"
             :class="['remove-btn', { 'confirm-delete': favorite.id === pendingDeleteId }]"
-            :title="favorite.id === pendingDeleteId ? 'Confirm deletion' : 'Remove from favorites'"
+            :title="getRemoveButtonTitle(favorite.id)"
           >
             {{ favorite.id === pendingDeleteId ? '❓' : '🗑️' }}
           </button>
@@ -72,6 +72,7 @@
 <script setup lang="ts">
 import { ref, onMounted, inject, watch, Ref } from 'vue';
 import { invoke } from "@tauri-apps/api/core";
+import { useI18n } from '../composables/useI18n';
 
 interface FavoriteItem {
   id: string;
@@ -89,7 +90,16 @@ const loading = ref(false);
 const pendingDeleteId = ref<string | null>(null);
 const deleteTimeout = ref<any>(null);
 
+const { t } = useI18n();
+const showNotification = inject('showNotification') as (message: string, type?: 'success' | 'error', duration?: number) => void;
 const favoritesTimestamp = inject<Ref<number>>('favoritesTimestamp');
+
+// 计算删除按钮的标题
+const getRemoveButtonTitle = (favoriteId: string) => {
+  return favoriteId === pendingDeleteId.value 
+    ? t('pages.favorites.item.actions.confirmRemove')
+    : t('pages.favorites.item.actions.remove');
+};
 
 if (favoritesTimestamp) {
   watch(favoritesTimestamp, () => {
@@ -109,7 +119,7 @@ async function loadFavorites() {
     displayedFavorites.value = favorites.value;
   } catch (error) {
     console.error("Failed to load favorites:", error);
-    alert(`Failed to load favorites: ${error}`);
+    showNotification(t('pages.favorites.messages.loadFailed', { error: String(error) }), 'error');
   } finally {
     loading.value = false;
   }
@@ -137,7 +147,7 @@ async function removeFavorite(id: string) {
       pendingDeleteId.value = null;
     } catch (error) {
       console.error("Failed to remove favorite:", error);
-      alert(`Failed to remove favorite: ${error}`);
+      showNotification(t('pages.favorites.messages.removeFailed', { error: String(error) }), 'error');
     }
   } else {
     pendingDeleteId.value = id;
@@ -150,10 +160,10 @@ async function removeFavorite(id: string) {
 async function copyMagnetLink(magnetLink: string) {
   try {
     await navigator.clipboard.writeText(magnetLink);
-    alert("Magnet link copied to clipboard!");
+    showNotification(t('pages.favorites.messages.copied'), 'success');
   } catch (error) {
     console.error("Failed to copy magnet link:", error);
-    alert("Failed to copy magnet link");
+    showNotification(t('pages.favorites.messages.copyFailed'), 'error');
   }
 }
 

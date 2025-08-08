@@ -1,0 +1,51 @@
+{
+  "pages": {
+    "priority": {
+      "title": "优先级关键词",
+      "subtitle": "设置关键词，使包含这些关键词的搜索结果出现在顶部并高亮显示",
+      "add": {
+        "title": "添加优先级关键词",
+        "placeholder": "输入关键词...",
+        "addButton": "添加",
+        "adding": "添加中..."
+      },
+      "list": {
+        "title": "当前优先级关键词",
+        "count": "{count} 个关键词",
+        "loading": "加载关键词中...",
+        "empty": "未设置优先级关键词",
+        "emptyMessage": "在上方添加关键词以优先显示包含这些关键词的搜索结果！"
+      },
+      "item": {
+        "badge": "优先级",
+        "deleteTitle": "删除关键词",
+        "confirmDeleteTitle": "确认删除"
+      },
+      "info": {
+        "howItWorks": {
+          "title": "优先级关键词的工作原理",
+          "autoPriority": "自动优先化：包含这些关键词的搜索结果将自动出现在结果列表顶部",
+          "visualHighlight": "视觉高亮：优先显示的结果将有特殊的视觉标识以便区分",
+          "caseInsensitive": "不区分大小写：关键词匹配不考虑大小写",
+          "partialMatching": "部分匹配：关键词在结果标题的任何位置出现都会被匹配"
+        },
+        "tips": {
+          "title": "有效关键词的使用技巧",
+          "specific": "使用识别高质量内容的具体术语（例如：\"BluRay\"、\"1080p\"、\"REMUX\"）",
+          "trustedGroups": "添加信任的发布组名称或编码者",
+          "qualityIndicators": "包含质量指标，如 \"DTS\"、\"Atmos\"、\"HDR\"",
+          "avoidCommon": "避免使用可能匹配过多结果的常见词汇"
+        }
+      },
+      "messages": {
+        "loadFailed": "加载关键词失败：{error}",
+        "addFailed": "添加关键词失败：{error}",
+        "deleteFailed": "删除关键词失败：{error}",
+        "validation": {
+          "enterKeyword": "请输入关键词",
+          "keywordExists": "该关键词已存在"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,69 @@
+{
+  "pages": {
+    "home": {
+      "title": "Search",
+      "subtitle": "Find and optimize magnet links with AI-powered filtering",
+      "search": {
+        "placeholder": "Enter search keyword...",
+        "button": {
+          "search": "🔍 Search",
+          "searching": "🔍 Search"
+        },
+        "filters": {
+          "pages": "Search pages",
+          "pageOptions": {
+            "one": "1 page",
+            "three": "3 pages", 
+            "five": "5 pages",
+            "ten": "10 pages"
+          },
+          "aiFilter": "AI Filter",
+          "titleMustContainKeyword": "Title must contain keyword"
+        },
+        "status": {
+          "idle": "Ready",
+          "searching": "Searching on {engine}...",
+          "searchingWithModel": "Searching...{modelInfo}",
+          "found": "Found {count} results",
+          "foundFromEngine": "Found {count} results from {engine}, searching other engines...{modelInfo}",
+          "analyzing": "AI analyzing {current}/{total}...",
+          "analyzingWithModel": "Analyzing results...{modelInfo}",
+          "analyzingParallel": "Analyzing with {batches} parallel batches ({completed}/{total} completed, {errorSuffix}using {model})...",
+          "complete": "Search completed",
+          "completeWithCount": "Search completed. Found {count} results{modelInfo}",
+          "completeWithAnalysis": "AI analysis completed in {duration}s ({count} results processed using {model})",
+          "completeWithErrors": "AI analysis completed in {duration}s ({count} results processed, {errors} errors using {model})",
+          "failed": "Search failed: {reason}",
+          "engineFailed": "{engine} search failed, waiting for other engines...{modelInfo}",
+          "requiresApiKey": "AI analysis requires API key configuration. Please check Settings.",
+          "analysisPartial": "Analyzing additional results...{modelInfo}",
+          "batchAnalysis": "Analyzing with {batches} parallel batches...",
+          "individualFallback": "Individual analysis fallback ({completed}/{total} completed{errorSuffix}, using {model})..."
+        }
+      },
+      "results": {
+        "title": "Search Results",
+        "count": "({count})",
+        "empty": "No results found",
+        "loadMore": "Load More",
+        "endOfList": "End of results",
+        "sortBy": "Sort by",
+        "sortOptions": {
+          "score": "Purity Score",
+          "size": "File Size"
+        }
+      },
+      "messages": {
+        "emptyKeyword": "Please enter a search keyword",
+        "addedToFavorites": "Added to favorites!",
+        "failedToAddFavorites": "Failed to add to favorites: {error}"
+      },
+      "errors": {
+        "apiRateLimit": "API rate limit exceeded",
+        "requestTimeout": "Request timeout", 
+        "networkError": "Network error",
+        "responseParsingError": "Response parsing error"
+      }
+    }
+  }
+}

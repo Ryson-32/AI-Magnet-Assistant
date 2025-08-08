@@ -1,14 +1,19 @@
 <script setup lang="ts">
 import { ref, provide, onMounted, watch } from "vue";
 import { invoke } from "@tauri-apps/api/core";
+import { useLocale } from "./composables/useI18n";
 import SideNavigation from "./components/SideNavigation.vue";
 import HomePage from "./components/HomePage.vue";
 import FavoritesPage from "./components/FavoritesPage.vue";
 import EnginesPage from "./components/EnginesPage.vue";
 import PriorityPage from "./components/PriorityPage.vue";
 import SettingsPage from "./components/SettingsPage.vue";
+import LanguageSwitcher from "./components/LanguageSwitcher.vue";
 
 const currentPage = ref('home');
+
+// 初始化语言设置
+const { initializeLocale } = useLocale();
 
 // 全局搜索状态
 const searchState = ref({
@@ -29,9 +34,14 @@ provide('searchState', searchState);
 const favoritesTimestamp = ref(Date.now());
 provide('favoritesTimestamp', favoritesTimestamp);
 
-// 在组件挂载时加载设置
+// 在组件挂载时加载设置和初始化语言
 onMounted(async () => {
   try {
+    // 1. 初始化语言设置（优先级最高）
+    await initializeLocale();
+    console.log('✅ 语言初始化完成');
+    
+    // 2. 加载搜索设置
     const savedSettings = await invoke('get_search_settings') as any;
     if (savedSettings) {
       searchState.value.useSmartFilter = savedSettings.use_smart_filter ?? true;
@@ -40,7 +50,7 @@ onMounted(async () => {
       searchState.value.titleMustContainKeyword = savedSettings.title_must_contain_keyword ?? true;
     }
   } catch (error) {
-    console.error('Failed to load search settings:', error);
+    console.error('Failed to load app settings:', error);
   }
 });
 
@@ -104,6 +114,11 @@ provide('showNotification', showNotification);
     />
     
     <main class="main-content">
+      <!-- i18n 测试区域 - 在顶部显示 -->
+      <div v-if="currentPage === 'settings'" class="i18n-test-area">
+        <LanguageSwitcher />
+      </div>
+      
       <HomePage v-show="currentPage === 'home'" />
       <FavoritesPage v-show="currentPage === 'favorites'" />
       <EnginesPage v-show="currentPage === 'engines'" />
@@ -159,6 +174,23 @@ html, body {
   min-width: 0;
 }
 
+.i18n-test-area {
+  background-color: #fff3cd;
+  border: 2px solid #ffeaa7;
+  border-radius: 8px;
+  margin: 20px;
+  padding: 10px;
+}
+
+.i18n-test-area::before {
+  content: "🌐 i18n 测试区域 / i18n Test Area";
+  display: block;
+  font-weight: bold;
+  color: #856404;
+  margin-bottom: 10px;
+  text-align: center;
+}
+
 .toast-notification {
   position: fixed;
   top: 20px;
@@ -186,7 +218,7 @@ html, body {
   transition: opacity 0.5s ease;
 }
 
-.fade-enter-from,
+.fade-enter,
 .fade-leave-to {
   opacity: 0;
 }

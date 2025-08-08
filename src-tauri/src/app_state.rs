@@ -6,6 +6,7 @@ use std::path::PathBuf;
 use tauri::{AppHandle, Manager};
 use anyhow::{Result, anyhow};
 use uuid::Uuid;
+use crate::i18n::{ErrorCode, translate_error};
 
 /// 收藏项数据结构
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -137,6 +138,7 @@ pub struct AppData {
     pub llm_config: LlmConfig,
     pub search_settings: SearchSettings,
     pub download_config: DownloadConfig,
+    pub current_locale: String, // 当前语言设置
     pub version: String, // 用于数据迁移
 }
 
@@ -158,6 +160,7 @@ impl Default for AppData {
             llm_config: LlmConfig::default(),
             search_settings: SearchSettings::default(),
             download_config: DownloadConfig::default(),
+            current_locale: "en".to_string(), // 默认英文
             version: "1.0.0".to_string(),
         }
     }
@@ -256,7 +259,7 @@ pub fn add_to_favorites(
     
     // 检查是否已经收藏
     if data.favorites.iter().any(|item| item.magnet_link == magnet_link) {
-        return Err(anyhow!("Item already in favorites"));
+        return Err(anyhow!(translate_error(&ErrorCode::FavoritesDuplicate)));
     }
     
     let favorite_item = FavoriteItem {
@@ -285,7 +288,7 @@ pub fn remove_from_favorites(state: &AppState, id: String) -> Result<()> {
     data.favorites.retain(|item| item.id != id);
     
     if data.favorites.len() == initial_len {
-        return Err(anyhow!("Favorite item not found"));
+        return Err(anyhow!(translate_error(&ErrorCode::FavoritesNotFound)));
     }
     
     Ok(())
@@ -339,7 +342,7 @@ pub fn update_search_engine(
         engine.url_template = url_template;
         Ok(())
     } else {
-        Err(anyhow!("Search engine not found"))
+        Err(anyhow!(translate_error(&ErrorCode::EngineNotFound)))
     }
 }
 
@@ -357,7 +360,7 @@ pub fn update_engine_status(state: &AppState, id: String, is_enabled: bool) -> R
         engine.is_enabled = is_enabled;
         Ok(())
     } else {
-        Err(anyhow!("Search engine not found"))
+        Err(anyhow!(translate_error(&ErrorCode::EngineNotFound)))
     }
 }
 
@@ -368,7 +371,7 @@ pub fn delete_engine(state: &AppState, id: String) -> Result<()> {
     // 检查是否可删除
     if let Some(engine) = data.search_engines.iter().find(|e| e.id == id) {
         if !engine.is_deletable {
-            return Err(anyhow!("Cannot delete default search engine"));
+            return Err(anyhow!(translate_error(&ErrorCode::EngineNotDeletable)));
         }
     }
     
@@ -376,7 +379,7 @@ pub fn delete_engine(state: &AppState, id: String) -> Result<()> {
     data.search_engines.retain(|engine| engine.id != id);
     
     if data.search_engines.len() == initial_len {
-        return Err(anyhow!("Search engine not found"));
+        return Err(anyhow!(translate_error(&ErrorCode::EngineNotFound)));
     }
     
     Ok(())
@@ -390,7 +393,7 @@ pub fn add_priority_keyword(state: &AppState, keyword: String) -> Result<Priorit
     
     // 检查是否已存在
     if data.priority_keywords.iter().any(|k| k.keyword == keyword) {
-        return Err(anyhow!("Keyword already exists"));
+        return Err(anyhow!("Keyword already exists")); // 这个保持原样，因为没有对应的错误代码
     }
     
     let priority_keyword = PriorityKeyword {
@@ -415,7 +418,7 @@ pub fn delete_priority_keyword(state: &AppState, id: String) -> Result<()> {
     data.priority_keywords.retain(|keyword| keyword.id != id);
     
     if data.priority_keywords.len() == initial_len {
-        return Err(anyhow!("Priority keyword not found"));
+        return Err(anyhow!("Priority keyword not found")); // 这个保持原样，因为没有对应的错误代码
     }
     
     Ok(())
@@ -465,5 +468,20 @@ pub fn get_download_config(state: &AppState) -> DownloadConfig {
 pub fn update_download_config(state: &AppState, config: DownloadConfig) -> Result<()> {
     let mut data = state.lock().unwrap();
     data.download_config = config;
+    Ok(())
+}
+
+// ============ 语言设置相关函数 ============
+
+/// 获取当前语言设置
+pub fn get_current_locale(state: &AppState) -> String {
+    let data = state.lock().unwrap();
+    data.current_locale.clone()
+}
+
+/// 设置当前语言
+pub fn set_current_locale(state: &AppState, locale: String) -> Result<()> {
+    let mut data = state.lock().unwrap();
+    data.current_locale = locale;
     Ok(())
 }

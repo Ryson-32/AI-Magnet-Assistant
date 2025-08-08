@@ -1,0 +1,27 @@
+{
+  "components": {
+    "resultCard": {
+      "priority": "Priority",
+      "actions": {
+        "goToSource": "Go to source URL",
+        "addToFavorites": "Add to favorites",
+        "copyMagnetLink": "Copy magnet link",
+        "copied": "Copied!",
+        "quickDownload": "Quick download",
+        "opening": "Opening..."
+      },
+      "analysis": {
+        "score": "Score"
+      },
+      "fileList": {
+        "moreFiles": "+{count} more files",
+        "expandHint": "Click to expand",
+        "collapseHint": "Click to collapse"
+      },
+      "messages": {
+        "downloadStarted": "Download started successfully!",
+        "downloadFailed": "Failed to start download: {error}"
+      }
+    }
+  }
+}

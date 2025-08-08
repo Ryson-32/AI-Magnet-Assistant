@@ -1,5 +1,5 @@
 use anyhow::{Result, anyhow};
-use reqwest;
+// 移除未使用的顶层导入（reqwest 已通过具体路径使用）
 use scraper::{Html, Selector};
 use futures::future::join_all;
 use std::sync::Arc;
@@ -266,12 +266,11 @@ impl GenericProvider {
         }
     }
 
-    /// 设置 LLM 客户端和配置用于 AI 智能识别
-    pub fn with_llm_client_and_configs(
+    /// 设置 LLM 客户端和（第一阶段 HTML 提取用的）配置
+    pub fn with_llm_client_and_config(
         mut self,
         llm_client: Arc<dyn LlmClient>,
         extraction_config: LlmConfig,
-        _analysis_config: LlmConfig, // 保持向后兼容，但不再使用
     ) -> Self {
         self.llm_client = Some(llm_client);
         self.extraction_config = Some(extraction_config);
@@ -356,7 +355,7 @@ impl SearchProvider for GenericProvider {
             let preview = safe_truncate(&html, 500);
             search_log!(info, "HTML preview (前500字符，用于诊断):");
             println!("---START---");
-            println!("{}", preview);
+            println!("{preview}");
             println!("---END---");
         }
 
@@ -466,17 +465,10 @@ impl GenericProvider {
             // 第一阶段AI只提取基础信息，文件列表需要根据标题生成
             let file_list = generate_file_list_from_title(&basic_info.title);
 
-            // 处理source_url：如果是相对路径，需要转换为绝对路径
-            let source_url = basic_info.source_url.map(|url| {
-                if url.starts_with("http://") || url.starts_with("https://") {
-                    url
-                } else if url.starts_with("/") {
-                    // 相对路径，需要从URL模板中提取基础域名
-                    self.extract_base_url_from_template().map(|base| format!("{}{}", base, url)).unwrap_or(url)
-                } else {
-                    url
-                }
-            });
+            // 处理 source_url：统一使用 normalize_source_url
+            let source_url = basic_info
+                .source_url
+                .map(|href| self.normalize_source_url(&href));
 
             results.push(SearchResult {
                 title: clean_html_text(&basic_info.title),
@@ -498,7 +490,7 @@ impl GenericProvider {
         if let Ok(parsed_url) = url::Url::parse(&self.url_template) {
             if let Some(host) = parsed_url.host_str() {
                 let scheme = parsed_url.scheme();
-                return Some(format!("{}://{}", scheme, host));
+                return Some(format!("{scheme}://{host}"));
             }
         }
         None
@@ -511,7 +503,7 @@ impl GenericProvider {
         } else if href.starts_with("/") {
             // 相对路径，需要从URL模板中提取基础域名
             self.extract_base_url_from_template()
-                .map(|base| format!("{}{}", base, href))
+                .map(|base| format!("{base}{href}"))
                 .unwrap_or_else(|| href.to_string())
         } else {
             href.to_string()
@@ -726,7 +718,7 @@ impl GenericProvider {
             "unknown"
         };
 
-        format!("Torrent_{}", hash_part)
+        format!("Torrent_{hash_part}")
     }
 }
 
@@ -739,8 +731,8 @@ fn generate_file_list_from_title(title: &str) -> Vec<String> {
     if title_lower.contains("电影") || title_lower.contains("movie") || title_lower.contains("film") {
         // 电影类型
         let base_name = extract_clean_title(title);
-        file_list.push(format!("{}.1080p.BluRay.x264.mkv", base_name));
-        file_list.push(format!("{}.720p.BluRay.x264.mkv", base_name));
+        file_list.push(format!("{base_name}.1080p.BluRay.x264.mkv"));
+        file_list.push(format!("{base_name}.720p.BluRay.x264.mkv"));
         file_list.push("Subtitles/Chinese.srt".to_string());
         file_list.push("Subtitles/English.srt".to_string());
         file_list.push("Sample.mkv".to_string());
@@ -748,14 +740,14 @@ fn generate_file_list_from_title(title: &str) -> Vec<String> {
         // 电视剧类型
         let base_name = extract_clean_title(title);
         for i in 1..=10 {
-            file_list.push(format!("{}.S01E{:02}.1080p.WEB-DL.x264.mkv", base_name, i));
+            file_list.push(format!("{base_name}.S01E{i:02}.1080p.WEB-DL.x264.mkv"));
         }
         file_list.push("Subtitles/Chinese.srt".to_string());
         file_list.push("Subtitles/English.srt".to_string());
     } else if title_lower.contains("游戏") || title_lower.contains("game") {
         // 游戏类型
         let base_name = extract_clean_title(title);
-        file_list.push(format!("{}.exe", base_name));
+        file_list.push(format!("{base_name}.exe"));
         file_list.push("Setup.exe".to_string());
         file_list.push("Crack/Keygen.exe".to_string());
         file_list.push("README.txt".to_string());
@@ -763,21 +755,21 @@ fn generate_file_list_from_title(title: &str) -> Vec<String> {
         // 音乐类型
         let base_name = extract_clean_title(title);
         for i in 1..=12 {
-            file_list.push(format!("{} - Track {:02}.mp3", base_name, i));
+            file_list.push(format!("{base_name} - Track {i:02}.mp3"));
         }
         file_list.push("Cover.jpg".to_string());
     } else if title_lower.contains("软件") || title_lower.contains("software") || title_lower.contains("app") {
         // 软件类型
         let base_name = extract_clean_title(title);
-        file_list.push(format!("{}_Setup.exe", base_name));
+        file_list.push(format!("{base_name}_Setup.exe"));
         file_list.push("Crack/Patch.exe".to_string());
         file_list.push("License.txt".to_string());
         file_list.push("README.txt".to_string());
     } else {
         // 默认类型 - 基于标题生成通用文件
         let base_name = extract_clean_title(title);
-        file_list.push(format!("{}.mkv", base_name));
-        file_list.push(format!("{}.mp4", base_name));
+        file_list.push(format!("{base_name}.mkv"));
+        file_list.push(format!("{base_name}.mp4"));
         file_list.push("README.txt".to_string());
     }
 
@@ -790,6 +782,8 @@ fn generate_file_list_from_title(title: &str) -> Vec<String> {
 }
 
 /// 从标题中提取干净的名称（移除特殊字符和格式信息）
+/// 用途：用于搜索解析阶段生成稳定的文件名，尽量保证可预测与无特殊字符。
+/// 注意：展示给用户的标题清理应使用 `clean_title_unified`（main.rs）。
 fn extract_clean_title(title: &str) -> String {
     let mut clean_title = title.to_string();
 
@@ -803,7 +797,7 @@ fn extract_clean_title(title: &str) -> String {
     ];
 
     for pattern in &patterns_to_remove {
-        if let Ok(re) = regex::Regex::new(&format!("(?i){}", pattern)) {
+        if let Ok(re) = regex::Regex::new(&format!("(?i){pattern}")) {
             clean_title = re.replace_all(&clean_title, "").to_string();
         }
     }
@@ -955,7 +949,7 @@ pub fn create_ai_enhanced_search_core(
         for (name, url_template) in custom_engines {
             println!("✅ Adding AI-enhanced custom provider: {}", name);
             let provider = GenericProvider::new(name, url_template)
-                .with_llm_client_and_configs(llm_client.clone(), extract_config.clone(), extract_config.clone())
+                .with_llm_client_and_config(llm_client.clone(), extract_config.clone())
                 .with_priority_keywords(priority_keywords.clone());
             providers.push(Arc::new(provider));
         }
@@ -977,7 +971,7 @@ pub fn create_ai_enhanced_search_core(
 mod tests {
     use super::*;
     use httpmock::prelude::*;
-    use tokio;
+    // removed redundant single-component import per clippy
 
     #[tokio::test]
     async fn test_search_successful() {
@@ -987,23 +981,35 @@ mod tests {
         // Create a mock
         let mock = server.mock(|when, then| {
             when.method(GET)
-                .path("/search-test-1.html");
+                .path("/search-test-1-1-1.html");
             then.status(200)
                 .header("content-type", "text/html; charset=UTF-8")
                 .body(r#"
                     <!DOCTYPE html>
                     <html>
                     <body>
-                        <table>
-                            <tr class="item">
-                                <td class="item-title"><a href="/detail/123">Test Title 1</a></td>
-                                <td><a href="magnet:?xt=urn:btih:12345">Magnet Link</a></td>
-                            </tr>
-                            <tr class="item">
-                                <td class="item-title"><a href="/detail/678">Test Title 2</a></td>
-                                <td><a href="magnet:?xt=urn:btih:67890">Magnet Link</a></td>
-                            </tr>
-                        </table>
+                        <div class="ssbox">
+                            <div class="title"><h3><a href="/detail/123">Test Title 1</a></h3></div>
+                            <div class="sbar">
+                                <a href="magnet:?xt=urn:btih:12345">Magnet Link</a>
+                                <span>大小: 1.2GB</span>
+                            </div>
+                            <ul>
+                                <li>File A 700MB</li>
+                                <li>File B 500MB</li>
+                            </ul>
+                        </div>
+                        <div class="ssbox">
+                            <div class="title"><h3><a href="/detail/678">Test Title 2</a></h3></div>
+                            <div class="sbar">
+                                <a href="magnet:?xt=urn:btih:67890">Magnet Link</a>
+                                <span>大小: 900MB</span>
+                            </div>
+                            <ul>
+                                <li>Episode 01 450MB</li>
+                                <li>Episode 02 450MB</li>
+                            </ul>
+                        </div>
                     </body>
                     </html>
                 "#);
@@ -1030,7 +1036,7 @@ mod tests {
         // Create a mock for a page with no items
         let mock = server.mock(|when, then| {
             when.method(GET)
-                .path("/search-empty-1.html");
+                .path("/search-empty-1-1-1.html");
             then.status(200)
                 .header("content-type", "text/html; charset=UTF-8")
                 .body(r#"

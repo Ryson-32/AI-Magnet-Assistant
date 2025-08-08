@@ -1,24 +1,29 @@
 <template>
   <div class="settings-page">
     <div class="page-header">
-      <h1>Settings</h1>
-      <p>Configure your application preferences</p>
+      <h1>{{ $t('pages.settings.title') }}</h1>
+      <p>{{ $t('pages.settings.subtitle') }}</p>
+    </div>
+
+    <!-- 语言设置区域 -->
+    <div class="settings-section">
+      <LanguageSwitcher />
     </div>
 
     <div class="settings-section">
       <div class="section-header">
-        <h2>AI Configuration</h2>
-        <p>Configure your AI providers for intelligent content analysis</p>
+        <h2>{{ $t('pages.settings.ai.title') }}</h2>
+        <p>{{ $t('pages.settings.ai.subtitle') }}</p>
       </div>
 
       <!-- 第一次API调用配置：HTML提取 -->
       <div class="ai-config-section">
-        <h3>HTML Content Extraction (First API Call)</h3>
-        <p class="config-description">Used to extract magnet links and basic information from search result pages</p>
+        <h3>{{ $t('pages.settings.ai.extraction.title') }}</h3>
+        <p class="config-description">{{ $t('pages.settings.ai.extraction.description') }}</p>
 
         <div class="settings-form">
           <div class="form-group">
-            <label for="extractionProvider">Provider</label>
+            <label for="extractionProvider">{{ $t('pages.settings.ai.extraction.provider') }}</label>
             <select id="extractionProvider" v-model="llmConfig.extraction_config.provider">
               <option value="gemini">Google Gemini</option>
               <option value="openai">OpenAI</option>
@@ -26,42 +31,39 @@
           </div>
 
           <div class="form-group">
-            <label for="extractionApiKey">API Key</label>
+            <label for="extractionApiKey">{{ $t('pages.settings.ai.extraction.apiKey') }}</label>
             <div class="input-with-button">
               <input
                 id="extractionApiKey"
                 v-model="llmConfig.extraction_config.api_key"
                 type="password"
-                placeholder="Enter your API key..."
-                required
-              />
+                :placeholder="$t('pages.settings.ai.extraction.placeholders.apiKey')"
+                required />
               <button type="button" @click="testExtractionConnection" class="test-btn" :disabled="isTestingExtraction">
-                {{ isTestingExtraction ? 'Testing...' : 'Test' }}
+                {{ $t('pages.settings.ai.extraction.testing') }}
               </button>
             </div>
-            <small class="help-text">
-              Your API key is stored securely and only used for AI analysis
-            </small>
+            <small class="help-text">{{ $t('pages.settings.ai.extraction.helpText') }}</small>
           </div>
 
           <div class="form-group">
-            <label for="extractionApiBase">API Base URL</label>
+            <label for="extractionApiBase">{{ $t('pages.settings.ai.extraction.apiBase') }}</label>
             <input
               id="extractionApiBase"
               v-model="llmConfig.extraction_config.api_base"
               type="url"
-              placeholder="e.g., https://generativelanguage.googleapis.com"
+              :placeholder="$t('pages.settings.ai.extraction.placeholders.apiBase')"
               required
             />
           </div>
 
           <div class="form-group">
-            <label for="extractionModel">Model</label>
+            <label for="extractionModel">{{ $t('pages.settings.ai.extraction.model') }}</label>
             <input
               id="extractionModel"
               v-model="llmConfig.extraction_config.model"
               type="text"
-              placeholder="e.g., gemini-2.5-flash"
+              :placeholder="$t('pages.settings.ai.extraction.placeholders.model')"
               required
             />
           </div>
@@ -70,12 +72,12 @@
 
       <!-- 第二次API调用配置：内容分析 -->
       <div class="ai-config-section">
-        <h3>Content Analysis (Second API Call)</h3>
-        <p class="config-description">Used to analyze content quality, generate tags, and clean titles</p>
+        <h3>{{ $t('pages.settings.ai.analysis.title') }}</h3>
+        <p class="config-description">{{ $t('pages.settings.ai.analysis.description') }}</p>
 
         <div class="settings-form">
           <div class="form-group">
-            <label for="analysisProvider">Provider</label>
+            <label for="analysisProvider">{{ $t('pages.settings.ai.analysis.provider') }}</label>
             <select id="analysisProvider" v-model="llmConfig.analysis_config.provider">
               <option value="gemini">Google Gemini</option>
               <option value="openai">OpenAI</option>
@@ -83,60 +85,55 @@
           </div>
 
           <div class="form-group">
-            <label for="analysisApiKey">API Key</label>
+            <label for="analysisApiKey">{{ $t('pages.settings.ai.analysis.apiKey') }}</label>
             <div class="input-with-button">
               <input
                 id="analysisApiKey"
                 v-model="llmConfig.analysis_config.api_key"
                 type="password"
-                placeholder="Enter your API key..."
-                required
-              />
+                :placeholder="$t('pages.settings.ai.analysis.placeholders.apiKey')"
+                required />
               <button type="button" @click="testAnalysisConnection" class="test-btn" :disabled="isTestingAnalysis">
-                {{ isTestingAnalysis ? 'Testing...' : 'Test' }}
+                {{ $t('pages.settings.ai.analysis.testing') }}
               </button>
             </div>
-            <small class="help-text">
-              Your API key is stored securely and only used for AI analysis
-            </small>
+            <small class="help-text">{{ $t('pages.settings.ai.analysis.helpText') }}</small>
           </div>
 
           <div class="form-group">
-            <label for="analysisApiBase">API Base URL</label>
+            <label for="analysisApiBase">{{ $t('pages.settings.ai.analysis.apiBase') }}</label>
             <input
-              id="analysisApiBase"
-              v-model="llmConfig.analysis_config.api_base"
-              type="url"
-              placeholder="e.g., https://generativelanguage.googleapis.com"
-              required
+                id="analysisApiBase"
+                v-model="llmConfig.analysis_config.api_base"
+                type="url"
+                :placeholder="$t('pages.settings.ai.analysis.placeholders.apiBase')"
+                required
             />
           </div>
 
           <div class="form-group">
-            <label for="analysisModel">Model</label>
-            <input
+            <label for="analysisModel">{{ $t('pages.settings.ai.analysis.model') }}</label>
+            <input  
               id="analysisModel"
               v-model="llmConfig.analysis_config.model"
               type="text"
-              placeholder="e.g., gemini-2.5-flash-lite"
+              :placeholder="$t('pages.settings.ai.analysis.placeholders.model')"
               required
             />
           </div>
 
           <div class="form-group">
-            <label for="analysisBatchSize">Batch Size</label>
+            <label for="analysisBatchSize">{{ $t('pages.settings.ai.analysis.batchSize') }}</label>
             <input
               id="analysisBatchSize"
               v-model.number="llmConfig.analysis_config.batch_size"
               type="number"
               min="1"
               max="20"
-              placeholder="5"
+              :placeholder="$t('pages.settings.ai.analysis.placeholders.batchSize')"
               required
             />
-            <small class="help-text">
-              Number of search results to analyze in a single API call (1-20). Lower values are faster but may hit rate limits due to more frequent requests.
-            </small>
+            <small class="help-text">{{ $t('pages.settings.ai.analysis.batchSizeHelp') }}</small>
           </div>
         </div>
       </div>
@@ -144,21 +141,26 @@
       <div class="form-actions">
         <div class="info-section">
           <div class="rate-limit-info" @mouseenter="showRateLimit = true" @mouseleave="hideRateLimit">
-            <svg class="table-icon" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <svg
+              class="table-icon"
+              viewBox="0 0 24 24"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+            >
               <path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z" fill="currentColor"/>
             </svg>
-            <span class="rate-limit-text">Rate Limits Table</span>
+            <span class="rate-limit-text">{{ $t('pages.settings.ai.rateLimit.title') }}</span>
 
             <!-- 悬停显示的速率限制表格 -->
             <div v-if="showRateLimit" class="rate-limit-tooltip" @mouseenter="clearHideTimeout" @mouseleave="hideRateLimit">
-              <h4>Gemini Model Rate Limits (AI Studio)</h4>
+              <h4>{{ $t('pages.settings.ai.rateLimit.tableTitle') }}</h4>
               <table class="rate-limit-table">
                 <thead>
                   <tr>
-                    <th>Model</th>
-                    <th>Requests/min</th>
-                    <th>Tokens/min</th>
-                    <th>Requests/day</th>
+                    <th>{{ $t('pages.settings.ai.rateLimit.headers.model') }}</th>
+                    <th>{{ $t('pages.settings.ai.rateLimit.headers.requestsPerMin') }}</th>
+                    <th>{{ $t('pages.settings.ai.rateLimit.headers.tokensPerMin') }}</th>
+                    <th>{{ $t('pages.settings.ai.rateLimit.headers.requestsPerDay') }}</th>
                   </tr>
                 </thead>
                 <tbody>
@@ -195,69 +197,61 @@
                 </tbody>
               </table>
               <div class="rate-limit-footer">
-                <a href="https://ai.google.dev/gemini-api/docs/rate-limits" target="_blank" rel="noopener noreferrer" class="rate-limit-link">
-                  📖 Official Rate Limits Documentation
+                <a href="https://ai.google.dev/gemini/api/docs/rate-limits" target="_blank" rel="noopener noreferrer" class="rate-limit-link">
+                  {{ $t('pages.settings.ai.rateLimit.documentation') }}
                 </a>
               </div>
             </div>
           </div>
 
           <div class="gemini-balance-info">
-            <span class="balance-text">Rate limits too low?</span>
+            <span class="balance-text">{{ $t('pages.settings.ai.rateLimit.rateLimitTooLow') }}</span>
             <a href="https://github.com/snailyp/gemini-balance" target="_blank" rel="noopener noreferrer" class="balance-link">
-              <span>Try gemini-balance</span>
-              <svg class="github-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg">
-                <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
-              </svg>
+              <span>{{ $t('pages.settings.ai.rateLimit.tryGeminiBalance') }}</span>
+              <svg class="github-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222 v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
             </a>
           </div>
         </div>
 
-        <button type="button" @click="saveLlmConfig" :disabled="isSaving" class="save-btn">
-          {{ isSaving ? 'Saving...' : 'Save AI Settings' }}
-        </button>
+        <button type="button" @click="saveLlmConfig" :disabled="isSaving" class="save-btn">{{ isSaving ? $t('pages.settings.ai.saving') : $t('pages.settings.ai.save') }}</button>
       </div>
     </div>
 
     <div class="settings-section">
       <div class="section-header">
-        <h2>Download Configuration</h2>
-        <p>Configure how magnet links are opened for quick downloading</p>
+        <h2>{{ $t('pages.settings.download.title') }}</h2>
+        <p>{{ $t('pages.settings.download.subtitle') }}</p>
       </div>
 
       <div class="settings-form">
         <div class="form-group">
-          <label for="customAppPath">Application Path</label>
+          <label for="customAppPath">{{ $t('pages.settings.download.applicationPath') }}</label>
           <div class="input-with-button">
             <input
               id="customAppPath"
               v-model="downloadConfig.custom_app_path"
               type="text"
-              placeholder="e.g., C:\Program Files\qBittorrent\qbittorrent.exe"
-            />
+              :placeholder="$t('pages.settings.download.applicationPathPlaceholder')"
+              required />
             <button type="button" @click="browseForApplication" class="browse-btn">
-              Browse
+              {{ $t('pages.settings.download.browse') }}
             </button>
           </div>
-          <small class="help-text">
-            Path to your preferred application for handling magnet links (e.g., qBittorrent, uTorrent, 115 Browser, etc.)
-          </small>
+          <small class="help-text">{{ $t('pages.settings.download.applicationPathHelp') }}</small>
         </div>
 
         <div class="form-group">
           <div class="checkbox-container">
             <label class="checkbox-only">
-              <input
-                type="checkbox"
-                v-model="downloadConfig.auto_close_page"
+              <input 
+                type="checkbox" 
+                v-model="downloadConfig.auto_close_page" 
               />
               <span class="checkmark"></span>
             </label>
-            <span class="checkbox-text">Auto-close download page</span>
+            <span class="checkbox-text">{{ $t('pages.settings.download.autoClosePage') }}</span>
           </div>
-          <small class="help-text">
-            Automatically close the download page after 10 seconds
-          </small>
+          <small class="help-text">{{ $t('pages.settings.download.autoClosePageHelp') }}</small>
         </div>
 
         <div class="form-group checkbox-with-button">
@@ -265,19 +259,17 @@
             <div class="checkbox-container">
               <label class="checkbox-only">
                 <input
-                  type="checkbox"
-                  v-model="downloadConfig.enable_quick_download"
+                  type="checkbox" 
+                  v-model="downloadConfig.enable_quick_download" 
                 />
                 <span class="checkmark"></span>
               </label>
-              <span class="checkbox-text">Enable Quick Download Button</span>
+              <span class="checkbox-text">{{ $t('pages.settings.download.enableQuickDownload') }}</span>
             </div>
-            <small class="help-text">
-              Show a quick download button next to each magnet link in search results
-            </small>
+            <small class="help-text">{{ $t('pages.settings.download.enableQuickDownloadHelp') }}</small>
           </div>
           <button type="button" @click="saveDownloadConfig" :disabled="isSavingDownload" class="save-btn-inline">
-            {{ isSavingDownload ? 'Saving...' : 'Save Download Settings' }}
+            {{ isSavingDownload ? $t('pages.settings.download.saving') : $t('pages.settings.download.save') }}
           </button>
         </div>
       </div>
@@ -285,51 +277,45 @@
 
     <div class="settings-section">
       <div class="section-header">
-        <h2>Data & Configuration</h2>
-        <p>Manage application data and configuration files</p>
+        <h2>{{ $t('pages.settings.data.title') }}</h2>
+        <p>{{ $t('pages.settings.data.subtitle') }}</p>
       </div>
       <div class="data-config-grid">
         <div class="data-config-item">
           <div>
-            <h4>Application Data</h4>
-            <p>All settings including API keys, custom engines, priorities, and favorites are saved in <code>app_data.json</code>.</p>
+            <h4>{{ $t('pages.settings.data.applicationData.title') }}</h4>
+            <p>{{ $t('pages.settings.data.applicationData.description') }}</p>
           </div>
-          <button @click="openConfigFolder" class="open-folder-btn">Open File Location</button>
+          <button @click="openConfigFolder" class="open-folder-btn">
+            {{ $t('pages.settings.data.applicationData.openLocation') }}
+          </button>
         </div>
       </div>
     </div>
 
     <div class="about-section">
       <div class="section-header">
-        <h2>About</h2>
+        <h2>{{ $t('pages.settings.about.title') }}</h2>
       </div>
       
       <div class="about-content">
         <div class="app-info">
-          <h3>🧲 AI Magnet Assistant</h3>
-          <p>Version 1.0.0</p>
-          <p>An intelligent magnet link search and optimization tool powered by AI.</p>
+          <h3>{{ $t('pages.settings.about.appInfo.name') }}</h3>
+          <p>{{ $t('pages.settings.about.appInfo.version') }}</p>
+          <p>{{ $t('pages.settings.about.appInfo.description') }}</p>
         </div>
         
         <div class="features-list">
-          <h4>Features</h4>
+          <h4>{{ $t('pages.settings.about.features.title') }}</h4>
           <ul>
-            <li>Multi-engine search aggregation</li>
-            <li>AI-powered content analysis and filtering</li>
-            <li>Customizable search engines</li>
-            <li>Priority keyword system</li>
-            <li>Favorites management</li>
-            <li>Smart result ranking</li>
+            <li v-for="(feature, index) in getFeaturesList()" :key="`feature-${index}`">{{ feature }}</li>
           </ul>
         </div>
         
         <div class="tech-stack">
-          <h4>Built With</h4>
+          <h4>{{ $t('pages.settings.about.techStack.title') }}</h4>
           <div class="tech-badges">
-            <span class="tech-badge">Tauri</span>
-            <span class="tech-badge">Vue 3</span>
-            <span class="tech-badge">Rust</span>
-            <span class="tech-badge">TypeScript</span>
+            <span v-for="(tech, index) in getTechStackList()" :key="`tech-${index}`" class="tech-badge">{{ tech }}</span>
           </div>
         </div>
       </div>
@@ -342,9 +328,12 @@ import { ref, onMounted, watch, inject } from 'vue';
 import { invoke } from "@tauri-apps/api/core";
 import { appDataDir } from '@tauri-apps/api/path';
 import { openPath } from '@tauri-apps/plugin-opener';
+import { useI18n } from '../composables/useI18n';
+import LanguageSwitcher from './LanguageSwitcher.vue';
 
 // 注入全局通知函数
 const showNotification = inject('showNotification') as (message: string, type?: 'success' | 'error', duration?: number) => void;
+const { t } = useI18n();
 
 const llmConfig = ref({
   extraction_config: {
@@ -359,7 +348,7 @@ const llmConfig = ref({
     api_base: "https://generativelanguage.googleapis.com",
     model: "gemini-2.5-flash-lite",
     batch_size: 5,
-  }
+  },
 });
 
 const isSaving = ref(false);
@@ -377,7 +366,6 @@ const downloadConfig = ref({
 
 const isSavingDownload = ref(false);
 
-
 onMounted(async () => {
   await loadLlmConfig();
   await loadDownloadConfig();
@@ -389,7 +377,7 @@ watch(() => llmConfig.value.extraction_config.provider, (newProvider) => {
     llmConfig.value.extraction_config.model = 'gemini-2.5-flash';
   } else if (newProvider === 'openai') {
     llmConfig.value.extraction_config.api_base = 'https://api.openai.com/v1';
-    llmConfig.value.extraction_config.model = 'gpt-3.5-turbo';
+    llmConfig.value.extraction_config.model = 'gpt-3.5-turbo'; 
   }
 });
 
@@ -409,13 +397,13 @@ watch(() => llmConfig.value.analysis_config.provider, (newProvider) => {
       llmConfig.value.analysis_config.batch_size = 5;
     }
   }
-});
+}); 
 
 async function loadLlmConfig() {
   try {
     const saved = await invoke("get_llm_config");
     if (saved) {
-      llmConfig.value = { ...llmConfig.value, ...saved };
+      llmConfig.value = { ...llmConfig.value, ...saved };  
       // Ensure batch_size has a default value for backward compatibility
       if (!llmConfig.value.analysis_config.batch_size) {
         llmConfig.value.analysis_config.batch_size = 5;
@@ -432,46 +420,48 @@ async function saveLlmConfig() {
     console.log("Saving LLM config:", llmConfig.value);
     await invoke("update_llm_config", { config: llmConfig.value });
     console.log("LLM config saved successfully to app_data.json");
-    showNotification("Settings saved successfully!");
+    showNotification(t('pages.settings.messages.settingsSaved'));
   } catch (error) {
-    console.error("Failed to save LLM config:", error);
-    showNotification(`Failed to save settings: ${error}`, 'error');
+    console.error("Failed to save LLM config:", error); 
+    showNotification(t('pages.settings.messages.settingsSaveFailed', { error: String(error) }), 'error');
   } finally {
     isSaving.value = false;
   }
 }
 
 async function testExtractionConnection() {
-  if (!llmConfig.value.extraction_config.api_key.trim()) {
-    showNotification("Please enter an API key for extraction config first", 'error');
+  if (!llmConfig.value.extraction_config.api_key.trim()) 
+  {
+    showNotification(t('pages.settings.messages.pleaseEnterApiKey', { type: t('pages.settings.ai.extraction.title') }), 'error');
     return;
   }
 
   isTestingExtraction.value = true;
   try {
     const result = await invoke("test_extraction_connection", { config: llmConfig.value.extraction_config });
-    showNotification(`Extraction connection successful: ${result}`);
+    showNotification(t('pages.settings.messages.testConnectionSuccess', { type: t('pages.settings.ai.extraction.title'), result: String(result) }));
   } catch (error) {
     console.error("Extraction API connection test failed:", error);
-    showNotification(`Extraction connection failed: ${error}`, 'error');
+    showNotification(t('pages.settings.messages.testConnectionFailed', { type: t('pages.settings.ai.extraction.title'), error: String(error) }), 'error');
   } finally {
-    isTestingExtraction.value = false;
+    isTestingExtraction.value = false; 
   }
 }
 
 async function testAnalysisConnection() {
-  if (!llmConfig.value.analysis_config.api_key.trim()) {
-    showNotification("Please enter an API key for analysis config first", 'error');
+  if (!llmConfig.value.analysis_config.api_key.trim()) 
+  {
+    showNotification(t('pages.settings.messages.pleaseEnterApiKey', { type: t('pages.settings.ai.analysis.title') }), 'error');
     return;
   }
 
   isTestingAnalysis.value = true;
   try {
     const result = await invoke("test_analysis_connection", { config: llmConfig.value.analysis_config });
-    showNotification(`Analysis connection successful: ${result}`);
+    showNotification(t('pages.settings.messages.testConnectionSuccess', { type: t('pages.settings.ai.analysis.title'), result: String(result) })); 
   } catch (error) {
     console.error("Analysis API connection test failed:", error);
-    showNotification(`Analysis connection failed: ${error}`, 'error');
+    showNotification(t('pages.settings.messages.testConnectionFailed', { type: t('pages.settings.ai.analysis.title'), error: String(error) }), 'error');
   } finally {
     isTestingAnalysis.value = false;
   }
@@ -480,7 +470,7 @@ async function testAnalysisConnection() {
 function hideRateLimit() {
   if (hideTimeout) {
     clearTimeout(hideTimeout);
-  }
+  } 
   hideTimeout = setTimeout(() => {
     showRateLimit.value = false;
   }, 100); // 100ms延迟，给用户时间移动鼠标到浮窗
@@ -502,7 +492,7 @@ async function loadDownloadConfig() {
     console.log("Download config loaded:", config);
   } catch (error) {
     console.error("Failed to load download config:", error);
-    showNotification(`Failed to load download config: ${error}`, 'error');
+    showNotification(t('pages.settings.messages.loadDownloadConfigFailed', { error: String(error) }), 'error');
   }
 }
 
@@ -512,10 +502,10 @@ async function saveDownloadConfig() {
     console.log("Saving download config:", downloadConfig.value);
     await invoke("update_download_config", { config: downloadConfig.value });
     console.log("Download config saved successfully");
-    showNotification("Download settings saved successfully!");
+    showNotification(t('pages.settings.messages.downloadSettingsSaved')); 
   } catch (error) {
     console.error("Failed to save download config:", error);
-    showNotification(`Failed to save download settings: ${error}`, 'error');
+    showNotification(t('pages.settings.messages.downloadSettingsSaveFailed', { error: String(error) }), 'error');    
   } finally {
     isSavingDownload.value = false;
   }
@@ -530,7 +520,7 @@ async function browseForApplication() {
     }
   } catch (error) {
     console.error("Failed to browse for application:", error);
-    showNotification(`Failed to browse for application: ${error}`, 'error');
+    showNotification(t('pages.settings.messages.browseFileFailed', { error: String(error) }), 'error');
   }
 }
 
@@ -541,8 +531,57 @@ async function openConfigFolder() {
     await openPath(dir);
   } catch (error) {
     console.error("Failed to open config folder:", error);
-    showNotification(`Could not open folder: ${error}`, 'error');
+    showNotification(t('pages.settings.messages.openFolderFailed', { error: String(error) }), 'error');
   }
+}
+
+// 获取功能列表
+function getFeaturesList() {
+  const { t, locale } = useI18n()
+  
+  try {
+    // 尝试直接访问翻译数据
+    const features = t('pages.settings.about.features.items');
+    if (Array.isArray(features)) {
+      return features;
+    }
+  } catch (error) {
+    console.warn('Error accessing features list:', error);
+  }
+  
+  // 备选方案：硬编码的功能列表（临时解决方案）
+  return locale.value === 'zh-CN' ? [
+    '多引擎搜索聚合',
+    'AI驱动的内容分析和过滤',
+    '可自定义搜索引擎',
+    '优先级关键词系统',
+    '收藏夹管理',
+    '智能结果排名'
+  ] : [
+    'Multi-engine search aggregation',
+    'AI-powered content analysis and filtering',
+    'Customizable search engines',
+    'Priority keyword system',
+    'Favorites management',
+    'Smart result ranking'
+  ];
+}
+
+// 获取技术栈列表
+function getTechStackList() {
+  const { t } = useI18n()
+  
+  try {
+    const techStack = t('pages.settings.about.techStack.badges');
+    if (Array.isArray(techStack)) {
+      return techStack;
+    }
+  } catch (error) {
+    console.warn('Error accessing tech stack list:', error);
+  }
+  
+  // 备选方案：硬编码的技术栈（临时解决方案）
+  return ['Tauri', 'Vue 3', 'Rust', 'TypeScript'];
 }
 </script>
 
@@ -754,8 +793,7 @@ async function openConfigFolder() {
   font-size: 12px;
 }
 
-.rate-limit-table th,
-.rate-limit-table td {
+.rate-limit-table th,.rate-limit-table td {
   padding: 8px 12px;
   text-align: left;
   border-bottom: 1px solid #e2e8f0;
@@ -846,14 +884,12 @@ async function openConfigFolder() {
   from {
     opacity: 0;
     transform: translateY(4px);
-  }
+  }  
   to {
     opacity: 1;
     transform: translateY(0);
   }
 }
-
-
 
 .save-btn {
   padding: 12px 24px;
@@ -984,7 +1020,7 @@ async function openConfigFolder() {
   border-color: #2563eb;
 }
 
-/* Checkbox 样式 */
+/* Checkbox styles */
 .checkbox-container {
   display: flex;
   align-items: center;
@@ -1037,12 +1073,12 @@ async function openConfigFolder() {
   border-color: #3b82f6;
 }
 
-/* 复选框与按钮的布局 */
+/* Checkbox with button layout */
 .checkbox-with-button {
   display: flex;
   align-items: flex-start;
   gap: 20px;
-}
+} 
 
 .checkbox-section {
   flex: 1;
@@ -1074,9 +1110,7 @@ async function openConfigFolder() {
   cursor: not-allowed;
 }
 
-
-
-/* Browse按钮样式 */
+/* Browse button style */
 .browse-btn {
   padding: 12px 20px;
   background: #f7fafc;

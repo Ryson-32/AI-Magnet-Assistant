@@ -1,23 +1,23 @@
 <template>
   <div class="engines-page">
     <div class="page-header">
-      <h1>Search Engines</h1>
-      <p>Manage and customize your search engines</p>
+      <h1>{{ $t('pages.engines.title') }}</h1>
+      <p>{{ $t('pages.engines.subtitle') }}</p>
     </div>
 
     <div class="engines-list">
       <div class="section-header">
-        <h2>Configured Engines</h2>
+        <h2>{{ $t('pages.engines.list.title') }}</h2>
       </div>
       
       <div v-if="loading" class="loading">
-        Loading engines...
+        {{ $t('pages.engines.list.loading') }}
       </div>
       
       <div v-else-if="engines.length === 0" class="empty-state">
         <div class="empty-icon">🔍</div>
-        <h3>No search engines configured</h3>
-        <p>Add your first search engine below!</p>
+        <h3>{{ $t('pages.engines.list.empty') }}</h3>
+        <p>{{ $t('pages.engines.list.emptyMessage') }}</p>
       </div>
       
       <div v-else class="engines-grid">
@@ -46,14 +46,14 @@
                   <button
                     @click="startEditEngine(engine)"
                     class="edit-btn"
-                    title="Edit engine"
+                    :title="$t('pages.engines.engine.actions.edit')"
                   >
                     ✏️
                   </button>
                   <button
                     @click="deleteEngine(engine.id)"
                     :class="['delete-btn', { 'confirm-delete': engine.id === pendingDeleteId }]"
-                    :title="engine.id === pendingDeleteId ? 'Confirm deletion' : 'Delete engine'"
+                    :title="engine.id === pendingDeleteId ? $t('pages.engines.engine.actions.confirmDelete') : $t('pages.engines.engine.actions.delete')"
                   >
                     {{ engine.id === pendingDeleteId ? '❓' : '🗑️' }}
                   </button>
@@ -61,9 +61,9 @@
               </div>
 
               <div class="engine-meta">
-                <span v-if="!engine.is_deletable" class="default-badge">Default</span>
+                <span v-if="!engine.is_deletable" class="default-badge">{{ $t('pages.engines.engine.default') }}</span>
                 <span :class="['status-badge', engine.is_enabled ? 'enabled' : 'disabled']">
-                  {{ engine.is_enabled ? 'Enabled' : 'Disabled' }}
+                  {{ engine.is_enabled ? $t('pages.engines.engine.enabled') : $t('pages.engines.engine.disabled') }}
                 </span>
               </div>
             </div>
@@ -71,7 +71,7 @@
             <!-- Edit View -->
             <div v-else class="engine-edit-form">
               <div class="edit-form-group">
-                <label>Engine Name</label>
+                <label>{{ $t('pages.engines.engine.name') }}</label>
                 <input
                   v-model="editingEngine.name"
                   type="text"
@@ -82,7 +82,7 @@
               <!-- URL Template and Edit Actions Row -->
               <div class="edit-url-row">
                 <div class="edit-form-group-inline">
-                  <label>URL Template</label>
+                  <label>{{ $t('pages.engines.engine.url') }}</label>
                   <input
                     v-model="editingEngine.url_template"
                     type="text"
@@ -93,7 +93,7 @@
                   <button
                     @click="saveEditEngine()"
                     class="save-edit-btn"
-                    title="Save changes"
+                    :title="$t('pages.engines.engine.actions.save')"
                     :disabled="isSavingEdit"
                   >
                     {{ isSavingEdit ? '⏳' : '✅' }}
@@ -101,7 +101,7 @@
                   <button
                     @click="cancelEditEngine()"
                     class="cancel-edit-btn"
-                    title="Cancel editing"
+                    :title="$t('pages.engines.engine.actions.cancel')"
                   >
                     ❌
                   </button>
@@ -115,8 +115,8 @@
 
     <div class="add-engine-section">
       <div class="section-header">
-        <h2>Add New Engine <span class="experimental-note">(Experimental, may be very slow)</span></h2>
-        <p>Add a custom search engine using direct template or auto-analysis</p>
+        <h2>{{ $t('pages.engines.add.title') }} <span class="experimental-note">{{ $t('pages.engines.add.experimental') }}</span></h2>
+        <p>{{ $t('pages.engines.add.subtitle') }}</p>
       </div>
 
       <!-- Mode Selection -->
@@ -124,12 +124,12 @@
         <label class="mode-option">
           <input type="radio" v-model="addEngineMode" value="auto" />
           <span class="radio-mark"></span>
-          Auto-Analysis
+          {{ $t('pages.engines.add.mode.auto') }}
         </label>
         <label class="mode-option">
           <input type="radio" v-model="addEngineMode" value="advanced" />
           <span class="radio-mark"></span>
-          Advanced: Direct URL Template
+          {{ $t('pages.engines.add.mode.advanced') }}
         </label>
       </div>
 
@@ -137,37 +137,36 @@
         <!-- Advanced Mode -->
         <div v-if="addEngineMode === 'advanced'" class="advanced-mode">
           <p class="help-text">
-            Enter the URL template directly using placeholders: <code>{keyword}</code> for search terms
-            and <code>{page}</code> for 1-based pagination.
+            {{ $t('pages.engines.add.form.helpText.advanced') }}
           </p>
 
           <div class="form-group">
-            <label for="engineName">Engine Name</label>
+            <label for="engineName">{{ $t('pages.engines.add.form.engineName') }}</label>
             <input
               id="engineName"
               v-model="newEngine.name"
               type="text"
-              placeholder="e.g., 1337x"
+              :placeholder="$t('pages.engines.add.form.placeholders.engineName')"
               required
             />
           </div>
 
           <div class="form-group">
-            <label for="urlTemplate">URL Template</label>
+            <label for="urlTemplate">{{ $t('pages.engines.add.form.urlTemplate') }}</label>
             <input
               id="urlTemplate"
               v-model="newEngine.urlTemplate"
               type="text"
-              placeholder="e.g., https://1337x.to/search/{keyword}/{page}/"
+              :placeholder="$t('pages.engines.add.form.placeholders.urlTemplate')"
               required
             />
           </div>
 
           <div class="template-examples">
-            <h4>Examples:</h4>
+            <h4>{{ $t('pages.engines.add.form.examples.title') }}</h4>
             <ul>
-              <li><code>https://1337x.to/search/{keyword}/{page}/</code> - 1-based pagination</li>
-              <li><code>https://torrentz2.eu/search?f={keyword}&p={page-1}</code> - 0-based pagination</li>
+              <li><code>{{ $t('pages.engines.add.form.examples.example1') }}</code></li>
+              <li><code>{{ $t('pages.engines.add.form.examples.example2') }}</code></li>
             </ul>
           </div>
         </div>
@@ -175,45 +174,44 @@
         <!-- Auto-Analysis Mode -->
         <div v-if="addEngineMode === 'auto'" class="auto-mode">
           <p class="help-text">
-            Enter two example URLs from the same search engine with different keywords and page numbers.
-            The system will automatically analyze the URL pattern and create a template.
+            {{ $t('pages.engines.add.form.helpText.auto') }}
           </p>
 
           <div class="form-group">
-            <label for="engineNameAuto">Engine Name</label>
+            <label for="engineNameAuto">{{ $t('pages.engines.add.form.engineName') }}</label>
             <input
               id="engineNameAuto"
               v-model="newEngine.name"
               type="text"
-              placeholder="e.g., My Custom Engine"
+              :placeholder="$t('pages.engines.add.form.placeholders.engineName')"
               required
             />
           </div>
 
           <div class="form-group">
             <div class="label-with-help">
-              <label for="urlExample1">URL Example 1 (search for 'test', page 1)</label>
-              <small>Paste the complete URL when searching for "test" on the first page</small>
+              <label for="urlExample1">{{ $t('pages.engines.add.form.urlExample1') }}</label>
+              <small>{{ $t('pages.engines.add.form.helpText.urlExample1') }}</small>
             </div>
             <input
               id="urlExample1"
               v-model="newEngine.urlExample1"
               type="url"
-              placeholder="e.g., https://example.com/search?q=test&page=1"
+              :placeholder="$t('pages.engines.add.form.placeholders.urlExample1')"
               required
             />
           </div>
 
           <div class="form-group">
             <div class="label-with-help">
-              <label for="urlExample2">URL Example 2 (search for 'test', page 2)</label>
-              <small>Paste the complete URL when searching for "test" on the second page</small>
+              <label for="urlExample2">{{ $t('pages.engines.add.form.urlExample2') }}</label>
+              <small>{{ $t('pages.engines.add.form.helpText.urlExample2') }}</small>
             </div>
             <input
               id="urlExample2"
               v-model="newEngine.urlExample2"
               type="url"
-              placeholder="e.g., https://example.com/search?q=test&page=2"
+              :placeholder="$t('pages.engines.add.form.placeholders.urlExample2')"
               required
             />
           </div>
@@ -221,7 +219,7 @@
         
         <div class="form-actions">
           <button type="submit" :disabled="isAdding" class="add-btn">
-            {{ isAdding ? 'Adding...' : 'Add Engine' }}
+            {{ isAdding ? $t('pages.engines.add.adding') : $t('pages.engines.add.button') }}
           </button>
         </div>
       </form>
@@ -232,9 +230,11 @@
 <script setup lang="ts">
 import { ref, onMounted, inject } from 'vue';
 import { invoke } from "@tauri-apps/api/core";
+import { useI18n } from '../composables/useI18n';
 
 // 注入全局通知函数
 const showNotification = inject('showNotification') as (message: string, type?: 'success' | 'error', duration?: number) => void;
+const { t } = useI18n();
 
 interface SearchEngine {
   id: string;
@@ -281,7 +281,7 @@ async function loadEngines() {
     engines.value = result as SearchEngine[];
   } catch (error) {
     console.error("Failed to load engines:", error);
-    showNotification(`Failed to load engines: ${error}`, 'error');
+    showNotification(t('pages.engines.messages.loadFailed', { error: String(error) }), 'error');
   } finally {
     loading.value = false;
   }
@@ -297,7 +297,7 @@ async function toggleEngine(id: string, isEnabled: boolean) {
     }
   } catch (error) {
     console.error("Failed to update engine status:", error);
-    showNotification(`Failed to update engine status: ${error}`, 'error');
+    showNotification(t('pages.engines.messages.updateStatusFailed', { error: String(error) }), 'error');
     // Reload to restore correct state
     await loadEngines();
   }
@@ -313,7 +313,7 @@ async function deleteEngine(id: string) {
       pendingDeleteId.value = null;
     } catch (error) {
       console.error("Failed to delete engine:", error);
-      showNotification(`Failed to delete engine: ${error}`, 'error');
+      showNotification(t('pages.engines.messages.deleteFailed', { error: String(error) }), 'error');
     }
   } else {
     pendingDeleteId.value = id;
@@ -327,23 +327,23 @@ async function addEngine() {
   // Validation based on mode
   if (addEngineMode.value === 'advanced') {
     if (!newEngine.value.name || !newEngine.value.urlTemplate) {
-      showNotification("Please fill in all fields", 'error');
+      showNotification(t('pages.engines.add.validation.fillAllFields'), 'error');
       return;
     }
 
     // Validate template format
     if (!newEngine.value.urlTemplate.includes('{keyword}')) {
-      showNotification("URL template must contain {keyword} placeholder", 'error');
+      showNotification(t('pages.engines.add.validation.keywordRequired'), 'error');
       return;
     }
 
     if (!newEngine.value.urlTemplate.includes('{page}') && !newEngine.value.urlTemplate.includes('{page-1}')) {
-      showNotification("URL template must contain {page} or {page-1} placeholder", 'error');
+      showNotification(t('pages.engines.add.validation.pageRequired'), 'error');
       return;
     }
   } else {
     if (!newEngine.value.name || !newEngine.value.urlExample1 || !newEngine.value.urlExample2) {
-      showNotification("Please fill in all fields", 'error');
+      showNotification(t('pages.engines.add.validation.fillAllFields'), 'error');
       return;
     }
   }
@@ -374,10 +374,10 @@ async function addEngine() {
     };
 
     await loadEngines(); // Reload the list
-    showNotification("Search engine added successfully!");
+    showNotification(t('pages.engines.messages.addSuccess'));
   } catch (error) {
     console.error("Failed to add engine:", error);
-    showNotification(`Failed to add engine: ${error}`, 'error');
+    showNotification(t('pages.engines.messages.addFailed', { error: String(error) }), 'error');
   } finally {
     isAdding.value = false;
   }
@@ -611,18 +611,18 @@ function cancelEditEngine() {
 
 async function saveEditEngine() {
   if (!editingEngine.value.name || !editingEngine.value.url_template) {
-    showNotification("Please fill in all fields", 'error');
+    showNotification(t('pages.engines.add.validation.fillAllFields'), 'error');
     return;
   }
 
   // Validate template format
   if (!editingEngine.value.url_template.includes('{keyword}')) {
-    showNotification("URL template must contain {keyword} placeholder", 'error');
+    showNotification(t('pages.engines.add.validation.keywordRequired'), 'error');
     return;
   }
 
   if (!editingEngine.value.url_template.includes('{page}') && !editingEngine.value.url_template.includes('{page-1}')) {
-    showNotification("URL template must contain {page} or {page-1} placeholder", 'error');
+    showNotification(t('pages.engines.add.validation.pageRequired'), 'error');
     return;
   }
 
@@ -636,10 +636,10 @@ async function saveEditEngine() {
 
     await loadEngines(); // Reload the list
     cancelEditEngine(); // Exit edit mode
-    showNotification("Search engine updated successfully!");
+    showNotification(t('pages.engines.messages.updateSuccess'));
   } catch (error) {
     console.error("Failed to update engine:", error);
-    showNotification(`Failed to update engine: ${error}`, 'error');
+    showNotification(t('pages.engines.messages.updateFailed', { error: String(error) }), 'error');
   } finally {
     isSavingEdit.value = false;
   }

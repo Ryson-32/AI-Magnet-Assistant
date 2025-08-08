@@ -1,0 +1,51 @@
+{
+  "pages": {
+    "priority": {
+      "title": "Priority Keywords",
+      "subtitle": "Set keywords that will make search results appear at the top and be highlighted",
+      "add": {
+        "title": "Add Priority Keyword",
+        "placeholder": "Enter a keyword...",
+        "addButton": "Add",
+        "adding": "Adding..."
+      },
+      "list": {
+        "title": "Current Priority Keywords",
+        "count": "{count} keyword{count, plural, one {} other {s}}",
+        "loading": "Loading keywords...",
+        "empty": "No priority keywords set",
+        "emptyMessage": "Add keywords above to prioritize search results containing them!"
+      },
+      "item": {
+        "badge": "Priority",
+        "deleteTitle": "Remove keyword",
+        "confirmDeleteTitle": "Confirm deletion"
+      },
+      "info": {
+        "howItWorks": {
+          "title": "How Priority Keywords Work",
+          "autoPriority": "Automatic Prioritization: Search results containing any of these keywords will automatically appear at the top of the results list",
+          "visualHighlight": "Visual Highlighting: Prioritized results will have a special visual indicator to distinguish them",
+          "caseInsensitive": "Case Insensitive: Keywords match regardless of capitalization",
+          "partialMatching": "Partial Matching: Keywords match if they appear anywhere in the result title"
+        },
+        "tips": {
+          "title": "Tips for Effective Keywords",
+          "specific": "Use specific terms that identify high-quality content (e.g., \"BluRay\", \"1080p\", \"REMUX\")",
+          "trustedGroups": "Add trusted release group names or encoders",
+          "qualityIndicators": "Include quality indicators like \"DTS\", \"Atmos\", \"HDR\"",
+          "avoidCommon": "Avoid overly common words that might match too many results"
+        }
+      },
+      "messages": {
+        "loadFailed": "Failed to load keywords: {error}",
+        "addFailed": "Failed to add keyword: {error}",
+        "deleteFailed": "Failed to delete keyword: {error}",
+        "validation": {
+          "enterKeyword": "Please enter a keyword",
+          "keywordExists": "This keyword already exists"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "components": {
+    "resultCard": {
+      "priority": "优先级",
+      "actions": {
+        "goToSource": "前往来源网址",
+        "addToFavorites": "添加到收藏",
+        "copyMagnetLink": "复制磁力链接",
+        "copied": "已复制！",
+        "quickDownload": "快速下载",
+        "opening": "打开中..."
+      },
+      "analysis": {
+        "score": "评分"
+      },
+      "fileList": {
+        "moreFiles": "+{count} 个文件",
+        "expandHint": "点击展开",
+        "collapseHint": "点击收起"
+      },
+      "messages": {
+        "downloadStarted": "下载启动成功！",
+        "downloadFailed": "启动下载失败：{error}"
+      }
+    }
+  }
+}

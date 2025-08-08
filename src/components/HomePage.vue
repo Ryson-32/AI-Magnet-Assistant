@@ -1,42 +1,42 @@
 <template>
   <div class="home-page">
     <div class="page-header">
-      <h1>Search</h1>
-      <p>Find and optimize magnet links with AI-powered filtering</p>
+      <h1>{{ $t('pages.home.title') }}</h1>
+      <p>{{ $t('pages.home.subtitle') }}</p>
     </div>
 
     <div class="search-section">
       <div class="search-row">
         <input
           v-model="keyword"
-          placeholder="Enter search keyword..."
+          :placeholder="$t('pages.home.search.placeholder')"
           @keyup.enter="search"
           class="search-input"
         />
         <button @click="search" class="search-btn">
-          {{ isSearching ? "🔍 Search" : "🔍 Search" }}
+          {{ $t('pages.home.search.button.search') }}
         </button>
       </div>
 
       <div class="filter-options">
         <div class="pages-selector">
-          <label for="maxPages">Search pages:</label>
+          <label for="maxPages">{{ $t('pages.home.search.filters.pages') }}:</label>
           <select id="maxPages" v-model="maxPages">
-            <option :value="1">1 page</option>
-            <option :value="3">3 pages</option>
-            <option :value="5">5 pages</option>
-            <option :value="10">10 pages</option>
+            <option :value="1">{{ $t('pages.home.search.filters.pageOptions.one') }}</option>
+            <option :value="3">{{ $t('pages.home.search.filters.pageOptions.three') }}</option>
+            <option :value="5">{{ $t('pages.home.search.filters.pageOptions.five') }}</option>
+            <option :value="10">{{ $t('pages.home.search.filters.pageOptions.ten') }}</option>
           </select>
         </div>
 
         <label class="checkbox-label">
           <input type="checkbox" v-model="useSmartFilter" />
-          <span>AI Filter</span>
+          <span>{{ $t('pages.home.search.filters.aiFilter') }}</span>
         </label>
 
         <label class="checkbox-label">
           <input type="checkbox" v-model="titleMustContainKeyword" />
-          <span>Title must contain keyword</span>
+          <span>{{ $t('pages.home.search.filters.titleMustContainKeyword') }}</span>
         </label>
       </div>
 
@@ -47,12 +47,12 @@
 
     <div v-if="results.length > 0" class="results-section">
       <div class="results-header">
-        <h2>Search Results ({{ results.length }})</h2>
+        <h2>{{ $t('pages.home.results.title') }} {{ $t('pages.home.results.count', { count: results.length }) }}</h2>
         <div class="sort-controls">
-          <label for="sortBy">Sort by:</label>
+          <label for="sortBy">{{ $t('pages.home.results.sortBy') }}:</label>
           <select id="sortBy" v-model="sortBy" @change="onSortChange" class="sort-selector">
-            <option value="score">Purity Score</option>
-            <option value="size">File Size</option>
+            <option value="score">{{ $t('pages.home.results.sortOptions.score') }}</option>
+            <option value="size">{{ $t('pages.home.results.sortOptions.size') }}</option>
           </select>
         </div>
       </div>
@@ -91,6 +91,10 @@
 import { ref, inject, computed } from 'vue';
 import { invoke } from "@tauri-apps/api/core";
 import ResultCard from './ResultCard.vue';
+import { useI18n } from '../composables/useI18n';
+
+const { t } = useI18n();
+
 const showNotification = inject('showNotification') as any; // Correct position
 const favoritesTimestamp = inject('favoritesTimestamp') as any;
 
@@ -140,6 +144,7 @@ const titleMustContainKeyword = searchState ? computed({
   get: () => searchState.value.titleMustContainKeyword,
   set: (val) => searchState.value.titleMustContainKeyword = val
 }) : ref(true);
+
 
 
 
@@ -215,7 +220,7 @@ async function onSortChange() {
 
 async function search() {
   if (!keyword.value.trim()) {
-    alert("Please enter a search keyword");
+    alert(t('pages.home.messages.emptyKeyword'));
     return;
   }
 
@@ -246,20 +251,20 @@ async function search() {
       modelInfo = ` (using ${extractionModel} for HTML extraction)`;
     }
 
-    searchStatus.value = `Searching...${modelInfo}`;
+    searchStatus.value = t('pages.home.search.status.searchingWithModel', { modelInfo });
 
     // 并行启动两个搜索
     const clmclmPromise = invoke("search_clmclm_first", {
       keyword: keyword.value,
-      maxPages: maxPages.value,
+      maxPages: maxPages.value
     });
 
     const otherEnginesPromise = invoke("search_other_engines", {
       keyword: keyword.value,
-      maxPages: maxPages.value,
+      maxPages: maxPages.value
     });
 
-    // 等待clmclm结果（通常更快）
+    // 等待clmclm результат（通常更快）
     try {
       const clmclmResults = await clmclmPromise;
 
@@ -272,7 +277,11 @@ async function search() {
       // 立即显示clmclm结果
       if (clmclmResults && (clmclmResults as any[]).length > 0) {
         results.value = clmclmResults as any[];
-        searchStatus.value = `Found ${results.value.length} results from clmclm.com, searching other engines...${modelInfo}`;
+        searchStatus.value = t('pages.home.search.status.foundFromEngine', { 
+          count: results.value.length, 
+          engine: 'clmclm.com',
+          modelInfo 
+        });
 
         // 立即排序和分析clmclm结果
         await sortResults(results.value);
@@ -283,14 +292,14 @@ async function search() {
             console.log('Search cancelled before clmclm analysis');
             return;
           }
-          searchStatus.value = `Analyzing clmclm.com results, searching other engines...${modelInfo}`;
+          searchStatus.value = t('pages.home.search.status.analyzingWithModel', { modelInfo });
           await analyzeResults();
           await sortResults(results.value);
         }
       }
     } catch (error) {
       console.log('clmclm search failed:', error);
-      searchStatus.value = `clmclm.com search failed, waiting for other engines...${modelInfo}`;
+      searchStatus.value = t('pages.home.search.status.engineFailed', { engine: 'clmclm.com', modelInfo });
     }
 
     // 等待其他引擎结果
@@ -307,7 +316,10 @@ async function search() {
       if (otherResults && (otherResults as any[]).length > 0) {
         const allResults = [...results.value, ...(otherResults as any[])];
         results.value = allResults;
-        searchStatus.value = `Found ${results.value.length} total results${modelInfo}`;
+        searchStatus.value = t('pages.home.search.status.completeWithCount', { 
+          count: results.value.length,
+          modelInfo 
+        });
 
         // 重新排序所有结果
         await sortResults(results.value);
@@ -319,7 +331,7 @@ async function search() {
             console.log('Search cancelled before additional analysis');
             return;
           }
-          searchStatus.value = `Analyzing additional results...${modelInfo}`;
+          searchStatus.value = t('pages.home.search.status.analysisPartial', { modelInfo });
           await analyzeResults();
           await sortResults(results.value);
         }
@@ -336,13 +348,16 @@ async function search() {
 
     // 最终状态 - 如果没有启用智能过滤或没有进行分析，显示基本搜索完成状态
     if (!useSmartFilter.value || results.value.length === 0) {
-      searchStatus.value = `Search completed. Found ${results.value.length} results${modelInfo}`;
+      searchStatus.value = t('pages.home.search.status.completeWithCount', { 
+        count: results.value.length,
+        modelInfo 
+      });
     }
     // 如果启用了智能过滤并且有结果，analyzeResults() 已经设置了包含分析信息的最终状态，不要覆盖它
 
   } catch (error) {
     console.error("Search failed:", error);
-    searchStatus.value = `Search failed: ${error}`;
+    searchStatus.value = t('pages.home.search.status.failed', { reason: String(error) });
   } finally {
     // 只有当前搜索才能重置搜索状态
     if (!isSearchCancelled()) {
@@ -356,7 +371,7 @@ async function analyzeResults() {
     // Load LLM config
     const llmConfig = await invoke("get_llm_config") as any;
     if (!llmConfig || !llmConfig.analysis_config?.api_key) {
-      searchStatus.value = "AI analysis requires API key configuration. Please check Settings.";
+      searchStatus.value = t('pages.home.search.status.requiresApiKey');
       return;
     }
 
@@ -437,8 +452,14 @@ async function analyzeResults() {
 
                 // 实时更新状态
                 const errorCount = errorMessages.length;
-                const statusSuffix = errorCount > 0 ? `, ${errorCount} errors` : '';
-                searchStatus.value = `Analyzing with ${totalBatches} parallel batches (${completedCount}/${results.value.length} completed${statusSuffix}, using ${analysisModel})...`;
+                const errorSuffix = errorCount > 0 ? `, ${errorCount} errors` : '';
+                searchStatus.value = t('pages.home.search.status.analyzingParallel', { 
+                  batches: totalBatches,
+                  completed: completedCount,
+                  total: results.value.length,
+                  errorSuffix,
+                  model: analysisModel 
+                });
               }
 
               console.log(`✅ [DEBUG] Batch ${batchIndex + 1}/${totalBatches} completed: ${analysisResults.length} results processed`);
@@ -492,8 +513,13 @@ async function analyzeResults() {
 
                 completedCount++;
                 const errorCount = errorMessages.length;
-                const statusSuffix = errorCount > 0 ? `, ${errorCount} errors` : '';
-                searchStatus.value = `Individual analysis fallback (${completedCount}/${results.value.length} completed${statusSuffix}, using ${analysisModel})...`;
+                const errorSuffix = errorCount > 0 ? `, ${errorCount} errors` : '';
+                searchStatus.value = t('pages.home.search.status.individualFallback', { 
+                  completed: completedCount,
+                  total: results.value.length,
+                  errorSuffix,
+                  model: analysisModel 
+                });
 
               } catch (e) {
                 console.error(`Failed to analyze result: ${result.title}`, e);
@@ -511,7 +537,12 @@ async function analyzeResults() {
                 console.log(`🔧 [DEBUG] Set individual error for result "${result.title}": ${errorMsg}`);
 
                 // 实时更新状态显示错误
-                searchStatus.value = `Individual analysis fallback (${completedCount}/${results.value.length} completed, ${errorMessages.length} errors, using ${analysisModel})...`;
+                searchStatus.value = t('pages.home.search.status.individualFallback', { 
+                  completed: completedCount,
+                  total: results.value.length,
+                  errorSuffix: `, ${errorMessages.length} errors`,
+                  model: analysisModel 
+                });
               }
             });
 
@@ -524,7 +555,12 @@ async function analyzeResults() {
       }
 
       // 等待所有批次完成
-      searchStatus.value = `Analyzing with ${totalBatches} parallel batches (${alreadyAnalyzedCount}/${results.value.length} completed, using ${analysisModel})...`;
+      searchStatus.value = t('pages.home.search.status.batchAnalysis', { 
+        batches: totalBatches,
+        completed: alreadyAnalyzedCount,
+        total: results.value.length,
+        model: analysisModel 
+      });
       const batchResults = await Promise.all(batchPromises);
 
       const successfulBatches = batchResults.filter((r: any) => r && r.success).length;
@@ -535,7 +571,7 @@ async function analyzeResults() {
       console.error('Complete parallel analysis failed:', e);
       hasErrors = true;
       errorMessages.push(`Complete analysis failed: ${e}`);
-      searchStatus.value = `Analysis failed: ${e}`;
+      searchStatus.value = t('pages.home.search.status.failed', { reason: String(e) });
     }
 
     // 显示最终状态
@@ -543,13 +579,22 @@ async function analyzeResults() {
     const duration = ((endTime - startTime) / 1000).toFixed(1);
 
     if (hasErrors && errorMessages.length > 0) {
-      searchStatus.value = `AI analysis completed in ${duration}s (${completedCount} results processed, ${errorMessages.length} errors using ${analysisModel})`;
+      searchStatus.value = t('pages.home.search.status.completeWithErrors', { 
+        duration,
+        count: completedCount,
+        errors: errorMessages.length,
+        model: analysisModel 
+      });
     } else {
-      searchStatus.value = `AI analysis completed in ${duration}s (${completedCount} results processed using ${analysisModel})`;
+      searchStatus.value = t('pages.home.search.status.completeWithAnalysis', { 
+        duration,
+        count: completedCount,
+        model: analysisModel 
+      });
     }
   } catch (error) {
     console.error('AI analysis failed:', error);
-    searchStatus.value = `AI analysis failed: ${error}`;
+    searchStatus.value = t('pages.home.search.status.failed', { reason: String(error) });
   }
 }
 
@@ -561,11 +606,11 @@ async function addToFavorites(result: any) {
       fileSize: result.file_size,
       fileList: result.file_list || [],
     });
-    showNotification("Added to favorites!", "success");
+    showNotification(t('pages.home.messages.addedToFavorites'), "success");
     favoritesTimestamp.value = Date.now(); // 触发刷新
   } catch (error) {
     console.error("Failed to add to favorites:", error);
-    showNotification(`Failed to add to favorites: ${error}`, "error");
+    showNotification(t('pages.home.messages.failedToAddFavorites', { error: String(error) }), "error");
   }
 }
 
@@ -584,13 +629,13 @@ function getErrorPreview(errorMessage: string): string {
 
   // 提取关键错误信息
   if (errorMessage.includes('rate limit') || errorMessage.includes('quota')) {
-    return 'API rate limit exceeded';
+    return t('pages.home.errors.apiRateLimit');
   } else if (errorMessage.includes('timeout')) {
-    return 'Request timeout';
+    return t('pages.home.errors.requestTimeout');
   } else if (errorMessage.includes('network') || errorMessage.includes('connection')) {
-    return 'Network error';
+    return t('pages.home.errors.networkError');
   } else if (errorMessage.includes('parse') || errorMessage.includes('JSON')) {
-    return 'Response parsing error';
+    return t('pages.home.errors.responseParsingError');
   } else {
     // 截取前50个字符作为预览
     return errorMessage.length > 50 ? errorMessage.substring(0, 50) + '...' : errorMessage;
@@ -800,6 +845,8 @@ function getErrorPreview(errorMessage: string): string {
     gap: 15px;
   }
 }
+
+
 
 @media (max-width: 600px) {
   .results-grid {

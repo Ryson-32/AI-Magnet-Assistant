@@ -1,0 +1,126 @@
+{
+  "pages": {
+    "settings": {
+      "title": "设置",
+      "subtitle": "配置应用程序首选项",
+      "ai": {
+        "title": "AI配置",
+        "subtitle": "配置AI提供商进行智能内容分析",
+        "extraction": {
+          "title": "HTML内容提取（第一次API调用）",
+          "description": "用于从搜索结果页面提取磁力链接和基本信息",
+          "provider": "提供商",
+          "apiKey": "API密钥",
+          "apiBase": "API基础地址",
+          "model": "模型",
+          "test": "测试",
+          "testing": "测试中...",
+          "helpText": "您的API密钥安全存储，仅用于AI分析",
+          "placeholders": {
+            "apiKey": "输入您的API密钥...",
+            "apiBase": "例如：https://generativelanguage.googleapis.com",
+            "model": "例如：gemini-2.5-flash"
+          }
+        },
+        "analysis": {
+          "title": "内容分析（第二次API调用）",
+          "description": "用于分析内容质量、生成标签和清理标题",
+          "provider": "提供商", 
+          "apiKey": "API密钥",
+          "apiBase": "API基础地址",
+          "model": "模型",
+          "batchSize": "批处理大小",
+          "test": "测试",
+          "testing": "测试中...",
+          "helpText": "您的API密钥安全存储，仅用于AI分析",
+          "batchSizeHelp": "单次API调用中分析的搜索结果数量（1-20）。较低的值更快，但可能因更频繁的请求而遇到速率限制。",
+          "placeholders": {
+            "apiKey": "输入您的API密钥...",
+            "apiBase": "例如：https://generativelanguage.googleapis.com",
+            "model": "例如：gemini-2.5-flash-lite",
+            "batchSize": "5"
+          }
+        },
+        "rateLimit": {
+          "title": "速率限制表",
+          "tableTitle": "Gemini模型速率限制（AI Studio）",
+          "headers": {
+            "model": "模型",
+            "requestsPerMin": "请求/分钟",
+            "tokensPerMin": "令牌/分钟",
+            "requestsPerDay": "请求/天"
+          },
+          "documentation": "官方速率限制文档",
+          "rateLimitTooLow": "速率限制太低？",
+          "tryGeminiBalance": "试试 gemini-balance"
+        },
+        "save": "保存AI设置",
+        "saving": "保存中..." 
+      },
+      "download": {
+        "title": "下载配置",
+        "subtitle": "配置磁力链接的打开方式以便快速下载",
+        "applicationPath": "应用程序路径",
+        "applicationPathHelp": "处理磁力链接的首选应用程序路径（例如：qBittorrent、uTorrent、115浏览器等）",
+        "applicationPathPlaceholder": "例如：C:\\Program Files\\qBittorrent\\qbittorrent.exe", 
+        "browse": "浏览",
+        "autoClosePage": "自动关闭下载页面",
+        "autoClosePageHelp": "10秒后自动关闭下载页面",
+        "enableQuickDownload": "启用快速下载按钮",
+        "enableQuickDownloadHelp": "在搜索结果中每个磁力链接旁边显示快速下载按钮",
+        "save": "保存下载设置",
+        "saving": "保存中..."   
+      },
+      "data": {
+        "title": "数据与配置",
+        "subtitle": "管理应用程序数据和配置文件",
+        "applicationData": {
+          "title": "应用程序数据",
+          "description": "所有设置包括API密钥、自定义引擎、优先级和收藏夹都保存在 app_data.json 中。",
+          "openLocation": "打开文件位置"
+        }
+      },
+      "language": {
+        "title": "语言设置",
+        "subtitle": "更改应用程序语言",
+        "current": "当前语言",
+        "select": "选择语言"
+      },
+      "about": {
+        "title": "关于",
+        "appInfo": {
+          "name": "AI 磁力助手",
+          "version": "版本 1.0.0",  
+          "description": "由AI驱动的智能磁力链接搜索与优化工具。"
+        }, 
+        "features": {
+          "title": "功能特点",
+          "items": [
+            "多引擎搜索聚合",
+            "AI驱动的内容分析和过滤",
+            "可自定义搜索引擎",
+            "优先级关键词系统",
+            "收藏夹管理",
+            "智能结果排名"
+          ]
+        }, 
+        "techStack": {
+          "title": "技术栈", 
+          "badges": ["Tauri", "Vue 3", "Rust", "TypeScript"]
+        }
+      },
+      "messages": {
+        "settingsSaved": "设置保存成功！",
+        "settingsSaveFailed": "设置保存失败：{error}",
+        "downloadSettingsSaved": "下载设置保存成功！",
+        "downloadSettingsSaveFailed": "下载设置保存失败：{error}",
+        "loadDownloadConfigFailed": "加载下载配置失败：{error}",
+        "browseFileFailed": "浏览文件失败：{error}",
+        "openFolderFailed": "无法打开文件夹：{error}",
+        "testConnectionSuccess": "{type} 连接成功：{result}",
+        "testConnectionFailed": "{type} 连接失败：{error}",
+        "pleaseEnterApiKey": "请先输入 {type} 配置的API密钥"
+      }
+    }
+  }
+}

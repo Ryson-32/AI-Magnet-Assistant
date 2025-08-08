@@ -1,13 +1,13 @@
 <template>
   <div class="priority-page">
     <div class="page-header">
-      <h1>Priority Keywords</h1>
-      <p>Set keywords that will make search results appear at the top and be highlighted</p>
+      <h1>{{ $t('pages.priority.title') }}</h1>
+      <p>{{ $t('pages.priority.subtitle') }}</p>
     </div>
 
     <div class="add-keyword-section">
       <div class="section-header">
-        <h2>Add Priority Keyword</h2>
+        <h2>{{ $t('pages.priority.add.title') }}</h2>
       </div>
       
       <form @submit.prevent="addKeyword" class="add-keyword-form">
@@ -15,12 +15,12 @@
           <input 
             v-model="newKeyword" 
             type="text" 
-            placeholder="Enter a keyword..."
+            :placeholder="$t('pages.priority.add.placeholder')"
             class="keyword-input"
             required
           />
           <button type="submit" :disabled="isAdding" class="add-btn">
-            {{ isAdding ? 'Adding...' : '+ Add' }}
+            {{ isAdding ? $t('pages.priority.add.adding') : '+ ' + $t('pages.priority.add.addButton') }}
           </button>
         </div>
       </form>
@@ -28,31 +28,31 @@
 
     <div class="keywords-list">
       <div class="section-header">
-        <h2>Current Priority Keywords</h2>
-        <span v-if="keywords.length > 0" class="keyword-count">{{ keywords.length }} keyword{{ keywords.length !== 1 ? 's' : '' }}</span>
+        <h2>{{ $t('pages.priority.list.title') }}</h2>
+        <span v-if="keywords.length > 0" class="keyword-count">{{ $t('pages.priority.list.count', { count: keywords.length }) }}</span>
       </div>
       
       <div v-if="loading" class="loading">
-        Loading keywords...
+        {{ $t('pages.priority.list.loading') }}
       </div>
       
       <div v-else-if="keywords.length === 0" class="empty-state">
         <div class="empty-icon">📌</div>
-        <h3>No priority keywords set</h3>
-        <p>Add keywords above to prioritize search results containing them!</p>
+        <h3>{{ $t('pages.priority.list.empty') }}</h3>
+        <p>{{ $t('pages.priority.list.emptyMessage') }}</p>
       </div>
       
       <div v-else class="keywords-grid">
         <div v-for="keyword in keywords" :key="keyword.id" class="keyword-item">
           <div class="keyword-content">
             <span class="keyword-text">{{ keyword.keyword }}</span>
-            <span class="keyword-badge">Priority</span>
+            <span class="keyword-badge">{{ $t('pages.priority.item.badge') }}</span>
           </div>
           
           <button
             @click="deleteKeyword(keyword.id)"
             :class="['delete-btn', { 'confirm-delete': keyword.id === pendingDeleteId }]"
-            :title="keyword.id === pendingDeleteId ? 'Confirm deletion' : 'Remove keyword'"
+            :title="keyword.id === pendingDeleteId ? $t('pages.priority.item.confirmDeleteTitle') : $t('pages.priority.item.deleteTitle')"
           >
             {{ keyword.id === pendingDeleteId ? '❓' : '✕' }}
           </button>
@@ -62,22 +62,22 @@
 
     <div class="info-section">
       <div class="info-card">
-        <h3>How Priority Keywords Work</h3>
+        <h3>{{ $t('pages.priority.info.howItWorks.title') }}</h3>
         <ul>
-          <li><strong>Automatic Prioritization:</strong> Search results containing any of these keywords will automatically appear at the top of the results list</li>
-          <li><strong>Visual Highlighting:</strong> Prioritized results will have a special visual indicator to distinguish them</li>
-          <li><strong>Case Insensitive:</strong> Keywords match regardless of capitalization</li>
-          <li><strong>Partial Matching:</strong> Keywords match if they appear anywhere in the result title</li>
+          <li><strong>{{ $t('pages.priority.info.howItWorks.autoPriority').split(':')[0] }}:</strong> {{ $t('pages.priority.info.howItWorks.autoPriority').split(':')[1] }}</li>
+          <li><strong>{{ $t('pages.priority.info.howItWorks.visualHighlight').split(':')[0] }}:</strong> {{ $t('pages.priority.info.howItWorks.visualHighlight').split(':')[1] }}</li>
+          <li><strong>{{ $t('pages.priority.info.howItWorks.caseInsensitive').split(':')[0] }}:</strong> {{ $t('pages.priority.info.howItWorks.caseInsensitive').split(':')[1] }}</li>
+          <li><strong>{{ $t('pages.priority.info.howItWorks.partialMatching').split(':')[0] }}:</strong> {{ $t('pages.priority.info.howItWorks.partialMatching').split(':')[1] }}</li>
         </ul>
       </div>
       
       <div class="tips-card">
-        <h3>Tips for Effective Keywords</h3>
+        <h3>{{ $t('pages.priority.info.tips.title') }}</h3>
         <ul>
-          <li>Use specific terms that identify high-quality content (e.g., "BluRay", "1080p", "REMUX")</li>
-          <li>Add trusted release group names or encoders</li>
-          <li>Include quality indicators like "DTS", "Atmos", "HDR"</li>
-          <li>Avoid overly common words that might match too many results</li>
+          <li>{{ $t('pages.priority.info.tips.specific') }}</li>
+          <li>{{ $t('pages.priority.info.tips.trustedGroups') }}</li>
+          <li>{{ $t('pages.priority.info.tips.qualityIndicators') }}</li>
+          <li>{{ $t('pages.priority.info.tips.avoidCommon') }}</li>
         </ul>
       </div>
     </div>
@@ -85,8 +85,9 @@
 </template>
 
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, inject } from 'vue';
 import { invoke } from "@tauri-apps/api/core";
+import { useI18n } from '../composables/useI18n';
 
 interface PriorityKeyword {
   id: string;
@@ -100,6 +101,9 @@ const isAdding = ref(false);
 const pendingDeleteId = ref<string | null>(null);
 const deleteTimeout = ref<any>(null);
 
+const { t } = useI18n();
+const showNotification = inject('showNotification') as (message: string, type?: 'success' | 'error', duration?: number) => void;
+
 onMounted(() => {
   loadKeywords();
 });
@@ -111,7 +115,7 @@ async function loadKeywords() {
     keywords.value = result as PriorityKeyword[];
   } catch (error) {
     console.error("Failed to load keywords:", error);
-    alert(`Failed to load keywords: ${error}`);
+    showNotification(t('pages.priority.messages.loadFailed', { error: String(error) }), 'error');
   } finally {
     loading.value = false;
   }
@@ -120,13 +124,13 @@ async function loadKeywords() {
 async function addKeyword() {
   const keyword = newKeyword.value.trim();
   if (!keyword) {
-    alert("Please enter a keyword");
+    showNotification(t('pages.priority.messages.validation.enterKeyword'), 'error');
     return;
   }
 
   // Check for duplicates
   if (keywords.value.some(k => k.keyword.toLowerCase() === keyword.toLowerCase())) {
-    alert("This keyword already exists");
+    showNotification(t('pages.priority.messages.validation.keywordExists'), 'error');
     return;
   }
 
@@ -137,7 +141,7 @@ async function addKeyword() {
     await loadKeywords(); // Reload the list
   } catch (error) {
     console.error("Failed to add keyword:", error);
-    alert(`Failed to add keyword: ${error}`);
+    showNotification(t('pages.priority.messages.addFailed', { error: String(error) }), 'error');
   } finally {
     isAdding.value = false;
   }
@@ -153,7 +157,7 @@ async function deleteKeyword(id: string) {
       pendingDeleteId.value = null;
     } catch (error) {
       console.error("Failed to delete keyword:", error);
-      alert(`Failed to delete keyword: ${error}`);
+      showNotification(t('pages.priority.messages.deleteFailed', { error: String(error) }), 'error');
     }
   } else {
     pendingDeleteId.value = id;

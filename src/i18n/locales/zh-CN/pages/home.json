@@ -1,0 +1,69 @@
+{
+  "pages": {
+    "home": {
+      "title": "搜索",
+      "subtitle": "使用AI智能过滤查找并优化磁力链接",
+      "search": {
+        "placeholder": "请输入搜索关键词...",
+        "button": {
+          "search": "🔍 搜索",
+          "searching": "🔍 搜索中"
+        },
+        "filters": {
+          "pages": "搜索页数",
+          "pageOptions": {
+            "one": "1页",
+            "three": "3页",
+            "five": "5页", 
+            "ten": "10页"
+          },
+          "aiFilter": "AI过滤",
+          "titleMustContainKeyword": "标题必须包含关键词"
+        },
+        "status": {
+          "idle": "准备就绪",
+          "searching": "正在 {engine} 搜索...",
+          "searchingWithModel": "正在搜索...{modelInfo}",
+          "found": "找到 {count} 个结果",
+          "foundFromEngine": "从 {engine} 找到 {count} 个结果，正在搜索其他引擎...{modelInfo}",
+          "analyzing": "AI 分析中 {current}/{total}...",
+          "analyzingWithModel": "正在分析结果...{modelInfo}",
+          "analyzingParallel": "使用 {batches} 个并行批次分析中（{completed}/{total} 已完成{errorSuffix}，使用 {model}）...",
+          "complete": "搜索完成",
+          "completeWithCount": "搜索完成。找到 {count} 个结果{modelInfo}",
+          "completeWithAnalysis": "AI分析在 {duration}s 内完成（处理了 {count} 个结果，使用 {model}）",
+          "completeWithErrors": "AI分析在 {duration}s 内完成（处理了 {count} 个结果，{errors} 个错误，使用 {model}）",
+          "failed": "搜索失败：{reason}",
+          "engineFailed": "{engine} 搜索失败，等待其他引擎...{modelInfo}",
+          "requiresApiKey": "AI分析需要配置API密钥。请检查设置。",
+          "analysisPartial": "正在分析额外结果...{modelInfo}",
+          "batchAnalysis": "使用 {batches} 个并行批次分析中...",
+          "individualFallback": "单个分析回退（{completed}/{total} 已完成{errorSuffix}，使用 {model}）..."
+        }
+      },
+      "results": {
+        "title": "搜索结果",
+        "count": "({count})",
+        "empty": "未找到结果",
+        "loadMore": "加载更多",
+        "endOfList": "已加载全部",
+        "sortBy": "排序方式",
+        "sortOptions": {
+          "score": "纯净度评分",
+          "size": "文件大小"
+        }
+      },
+      "messages": {
+        "emptyKeyword": "请输入搜索关键词",
+        "addedToFavorites": "已添加到收藏夹！",
+        "failedToAddFavorites": "添加到收藏夹失败：{error}"
+      },
+      "errors": {
+        "apiRateLimit": "API调用频率超限",
+        "requestTimeout": "请求超时",
+        "networkError": "网络错误",
+        "responseParsingError": "响应解析错误"
+      }
+    }
+  }
+}

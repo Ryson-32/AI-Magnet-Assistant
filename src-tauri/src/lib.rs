@@ -3,3 +3,4 @@
 
 pub mod searcher;
 pub mod llm_service;
+pub mod i18n;

@@ -122,5 +122,14 @@ src-tauri/target
 src-tauri/gen/
 
 # Custom Ignores for Private Content
-/memory_bank/
+
+#/memory_bank/
 /private_docs/
+
+# Local build/test artifacts
+/.target_clippy/
+
+# Editor/OS junk
+.DS_Store
+Thumbs.db
+/.cursor/

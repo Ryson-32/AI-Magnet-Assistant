@@ -1,0 +1,78 @@
+{
+  "pages": {
+    "engines": {
+      "title": "Search Engines",
+      "subtitle": "Manage and customize your search engines",
+      "list": {
+        "title": "Configured Engines",
+        "empty": "No search engines configured",
+        "emptyMessage": "Add your first search engine below!",
+        "loading": "Loading engines..."
+      },
+      "engine": {
+        "name": "Engine Name",
+        "url": "URL Template",
+        "status": "Status",
+        "enabled": "Enabled",
+        "disabled": "Disabled",
+        "default": "Default",
+        "deletable": "Deletable",
+        "actions": {
+          "edit": "Edit engine",
+          "delete": "Delete engine",
+          "confirmDelete": "Confirm deletion",
+          "save": "Save changes",
+          "cancel": "Cancel editing"
+        }
+      },
+      "add": {
+        "title": "Add New Engine",
+        "subtitle": "Add a custom search engine using direct template or auto-analysis",
+        "experimental": "(Experimental, may be very slow)",
+        "mode": {
+          "auto": "Auto-Analysis",
+          "advanced": "Advanced: Direct URL Template"
+        },
+        "form": {
+          "engineName": "Engine Name",
+          "urlTemplate": "URL Template",
+          "urlExample1": "URL Example 1 (search for 'test', page 1)",
+          "urlExample2": "URL Example 2 (search for 'test', page 2)",
+          "placeholders": {
+            "engineName": "e.g., 1337x",
+            "urlTemplate": "e.g., https://1337x.to/search/{keyword}/{page}/",
+            "urlExample1": "e.g., https://example.com/search?q=test&page=1",
+            "urlExample2": "e.g., https://example.com/search?q=test&page=2"
+          },
+          "helpText": {
+            "advanced": "Enter the URL template directly using placeholders: {keyword} for search terms and {page} for 1-based pagination.",
+            "auto": "Enter two example URLs from the same search engine with different keywords and page numbers. The system will automatically analyze the URL pattern and create a template.",
+            "urlExample1": "Paste the complete URL when searching for \"test\" on the first page",
+            "urlExample2": "Paste the complete URL when searching for \"test\" on the second page"
+          },
+          "examples": {
+            "title": "Examples:",
+            "example1": "https://1337x.to/search/{keyword}/{page}/ - 1-based pagination",
+            "example2": "https://torrentz2.eu/search?f={keyword}&p={page-1} - 0-based pagination"
+          }
+        },
+        "button": "Add Engine",
+        "adding": "Adding...",
+        "validation": {
+          "fillAllFields": "Please fill in all fields",
+          "keywordRequired": "URL template must contain {keyword} placeholder",
+          "pageRequired": "URL template must contain {page} or {page-1} placeholder"
+        }
+      },
+      "messages": {
+        "loadFailed": "Failed to load engines: {error}",
+        "updateStatusFailed": "Failed to update engine status: {error}",
+        "deleteFailed": "Failed to delete engine: {error}",
+        "addSuccess": "Search engine added successfully!",
+        "addFailed": "Failed to add engine: {error}",
+        "updateSuccess": "Search engine updated successfully!",
+        "updateFailed": "Failed to update engine: {error}"
+      }
+    }
+  }
+}

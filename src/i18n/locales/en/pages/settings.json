@@ -1,0 +1,126 @@
+{
+  "pages": {
+    "settings": {
+      "title": "Settings",
+      "subtitle": "Configure your application preferences",
+      "ai": {
+        "title": "AI Configuration",
+        "subtitle": "Configure your AI providers for intelligent content analysis",
+        "extraction": {
+          "title": "HTML Content Extraction (First API Call)",
+          "description": "Used to extract magnet links and basic information from search result pages",
+          "provider": "Provider",
+          "apiKey": "API Key",
+          "apiBase": "API Base URL",
+          "model": "Model",
+          "test": "Test",
+          "testing": "Testing...",
+          "helpText": "Your API key is stored securely and only used for AI analysis",
+          "placeholders": {
+            "apiKey": "Enter your API key...",
+            "apiBase": "e.g., https://generativelanguage.googleapis.com",
+            "model": "e.g., gemini-2.5-flash"
+          }
+        },
+        "analysis": {
+          "title": "Content Analysis (Second API Call)",
+          "description": "Used to analyze content quality, generate tags, and clean titles",
+          "provider": "Provider",
+          "apiKey": "API Key",
+          "apiBase": "API Base URL",
+          "model": "Model",
+          "batchSize": "Batch Size",
+          "test": "Test",
+          "testing": "Testing...",
+          "helpText": "Your API key is stored securely and only used for AI analysis",
+          "batchSizeHelp": "Number of search results to analyze in a single API call (1-20). Lower values are faster but may hit rate limits due to more frequent requests.",
+          "placeholders": {
+            "apiKey": "Enter your API key...",
+            "apiBase": "e.g., https://generativelanguage.googleapis.com",
+            "model": "e.g., gemini-2.5-flash-lite",
+            "batchSize": "5"
+          }
+        },
+        "rateLimit": {
+          "title": "Rate Limits Table",
+          "tableTitle": "Gemini Model Rate Limits (AI Studio)",
+          "headers": {
+            "model": "Model",
+            "requestsPerMin": "Requests/min",
+            "tokensPerMin": "Tokens/min",
+            "requestsPerDay": "Requests/day"
+          },
+          "documentation": "📖 Official Rate Limits Documentation",
+          "rateLimitTooLow": "Rate limits too low?",
+          "tryGeminiBalance": "Try gemini-balance"
+        },
+        "save": "Save AI Settings",
+        "saving": "Saving..."
+      },
+      "download": {
+        "title": "Download Configuration",
+        "subtitle": "Configure how magnet links are opened for quick downloading",
+        "applicationPath": "Application Path",
+        "applicationPathHelp": "Path to your preferred application for handling magnet links (e.g., qBittorrent, uTorrent, 115 Browser, etc.)",
+        "applicationPathPlaceholder": "e.g., C:\\Program Files\\qBittorrent\\qbittorrent.exe",
+        "browse": "Browse",
+        "autoClosePage": "Auto-close download page",
+        "autoClosePageHelp": "Automatically close the download page after 10 seconds",
+        "enableQuickDownload": "Enable Quick Download Button",
+        "enableQuickDownloadHelp": "Show a quick download button next to each magnet link in search results",
+        "save": "Save Download Settings",
+        "saving": "Saving..."
+      },
+      "language": {
+        "title": "Language Settings",
+        "subtitle": "Change application language",
+        "current": "Current Language",
+        "select": "Select Language"
+      },
+      "data": {
+        "title": "Data & Configuration",
+        "subtitle": "Manage application data and configuration files",
+        "applicationData": {
+          "title": "Application Data",
+          "description": "All settings including API keys, custom engines, priorities, and favorites are saved in app_data.json.",
+          "openLocation": "Open File Location"
+        }
+      },
+      "about": {
+        "title": "About",
+        "appInfo": {
+          "name": "🧲 AI Magnet Assistant",
+          "version": "Version 1.0.0",
+          "description": "An intelligent magnet link search and optimization tool powered by AI."
+        },
+        "features": {
+          "title": "Features",
+          "items": [
+            "Multi-engine search aggregation",
+            "AI-powered content analysis and filtering",
+            "Customizable search engines",
+            "Priority keyword system",
+            "Favorites management",
+            "Smart result ranking"
+          ]
+        },
+        "techStack": {
+          "title": "Built With",
+          "badges": ["Tauri", "Vue 3", "Rust", "TypeScript"]
+        }
+      },
+      "messages": {
+        "settingsSaved": "Settings saved successfully!",
+        "settingsSaveFailed": "Failed to save settings: {error}",
+        "downloadSettingsSaved": "Download settings saved successfully!",
+        "downloadSettingsSaveFailed": "Failed to save download settings: {error}",
+        "loadDownloadConfigFailed": "Failed to load download config: {error}",
+        "browseFileFailed": "Failed to browse for application: {error}",
+        "openFolderFailed": "Could not open folder: {error}",
+        "testConnectionSuccess": "{type} connection successful: {result}",
+        "testConnectionFailed": "{type} connection failed: {error}",
+        "pleaseEnterApiKey": "Please enter an API key for {type} config first"
+      }
+    }
+  }
+}

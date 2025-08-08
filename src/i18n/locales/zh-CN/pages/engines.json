@@ -1,0 +1,78 @@
+{
+  "pages": {
+    "engines": {
+      "title": "搜索引擎",
+      "subtitle": "管理和自定义您的搜索引擎",
+      "list": {
+        "title": "已配置的引擎",
+        "empty": "未配置搜索引擎",
+        "emptyMessage": "在下方添加您的第一个搜索引擎！",
+        "loading": "加载引擎中..."
+      },
+      "engine": {
+        "name": "引擎名称",
+        "url": "URL模板",
+        "status": "状态",
+        "enabled": "已启用",
+        "disabled": "已禁用",
+        "default": "默认",
+        "deletable": "可删除",
+        "actions": {
+          "edit": "编辑引擎",
+          "delete": "删除引擎",
+          "confirmDelete": "确认删除",
+          "save": "保存更改",
+          "cancel": "取消编辑"
+        }
+      },
+      "add": {
+        "title": "添加新引擎",
+        "subtitle": "添加自定义搜索引擎，使用直接模板或自动分析",
+        "experimental": "（实验性功能，可能很慢）",
+        "mode": {
+          "auto": "自动分析",
+          "advanced": "高级：直接URL模板"
+        },
+        "form": {
+          "engineName": "引擎名称",
+          "urlTemplate": "URL模板",
+          "urlExample1": "URL示例 1（搜索'test'，第1页）",
+          "urlExample2": "URL示例 2（搜索'test'，第2页）",
+          "placeholders": {
+            "engineName": "例如：1337x",
+            "urlTemplate": "例如：https://1337x.to/search/{keyword}/{page}/",
+            "urlExample1": "例如：https://example.com/search?q=test&page=1",
+            "urlExample2": "例如：https://example.com/search?q=test&page=2"
+          },
+          "helpText": {
+            "advanced": "使用占位符直接输入URL模板：{keyword} 用于搜索词，{page} 用于基于1的分页。",
+            "auto": "输入同一搜索引擎中不同关键词和页码的两个示例URL。系统会自动分析URL模式并创建模板。",
+            "urlExample1": "粘贴在第一页搜索\"test\"时的完整URL",
+            "urlExample2": "粘贴在第二页搜索\"test\"时的完整URL"
+          },
+          "examples": {
+            "title": "示例：",
+            "example1": "https://1337x.to/search/{keyword}/{page}/ - 基于1的分页",
+            "example2": "https://torrentz2.eu/search?f={keyword}&p={page-1} - 基于0的分页"
+          }
+        },
+        "button": "添加引擎",
+        "adding": "添加中...",
+        "validation": {
+          "fillAllFields": "请填写所有字段",
+          "keywordRequired": "URL模板必须包含 {keyword} 占位符",
+          "pageRequired": "URL模板必须包含 {page} 或 {page-1} 占位符"
+        }
+      },
+      "messages": {
+        "loadFailed": "加载引擎失败：{error}",
+        "updateStatusFailed": "更新引擎状态失败：{error}",
+        "deleteFailed": "删除引擎失败：{error}",
+        "addSuccess": "搜索引擎添加成功！",
+        "addFailed": "添加引擎失败：{error}",
+        "updateSuccess": "搜索引擎更新成功！",
+        "updateFailed": "更新引擎失败：{error}"
+      }
+    }
+  }
+}

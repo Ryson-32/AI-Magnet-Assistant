@@ -1,0 +1,36 @@
+{
+  "pages": {
+    "favorites": {
+      "title": "收藏",
+      "subtitle": "您保存的磁力链接",
+      "search": {
+        "placeholder": "在收藏中搜索...",
+        "refresh": "刷新"
+      },
+      "list": {
+        "title": "{count} 个收藏",
+        "loading": "加载收藏中...",
+        "empty": "暂无收藏",
+        "emptyMessage": "开始从搜索结果中添加您喜欢的磁力链接！"
+      },
+      "item": {
+        "fileSize": "文件大小",
+        "created": "添加时间",
+        "files": "文件",
+        "filesCount": "文件（{count}个）",
+        "moreFiles": "...还有 {count} 个文件",
+        "actions": {
+          "copy": "复制磁力链接",
+          "remove": "从收藏中移除",
+          "confirmRemove": "确认删除"
+        }
+      },
+      "messages": {
+        "loadFailed": "加载收藏失败：{error}",
+        "removeFailed": "移除收藏失败：{error}",
+        "copied": "磁力链接已复制到剪贴板！",
+        "copyFailed": "复制磁力链接失败"
+      }
+    }
+  }
+}

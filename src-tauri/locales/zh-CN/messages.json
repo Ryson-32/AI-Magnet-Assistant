@@ -1,0 +1,29 @@
+{
+  "errors": {
+    "search_no_engines": "没有可用的搜索引擎进行此操作。",
+    "search_timeout": "搜索请求超时，请重试。",
+    "search_failed": "搜索操作失败：{details}",
+    "favorites_duplicate": "此项目已在收藏夹中。",
+    "favorites_not_found": "未找到收藏项目。",
+    "favorites_quota_exceeded": "收藏夹存储空间已满。",
+    "engine_not_found": "未找到搜索引擎。",
+    "engine_not_deletable": "无法删除默认搜索引擎。",
+    "engine_invalid": "搜索引擎配置无效。",
+    "system_io_error": "文件系统操作失败。",
+    "system_permission_denied": "此操作权限不足。",
+    "system_network_error": "网络连接错误。",
+    "ai_service_unavailable": "AI 服务当前不可用。",
+    "ai_service_quota_exceeded": "AI 服务配额已用完。",
+    "ai_service_invalid_key": "AI 服务 API 密钥无效。",
+    "unknown_error": "发生未知错误：{code}"
+  },
+  "system": {
+    "app_starting": "应用程序正在启动...",
+    "app_ready": "应用程序已就绪。",
+    "update_available": "有新版本可用。",
+    "locale_changed": "语言已更改为{locale}。",
+    "locale_invalid": "无效的语言设置：{locale}",
+    "config_saved": "配置保存成功。",
+    "config_load_failed": "加载配置失败。"
+  }
+}

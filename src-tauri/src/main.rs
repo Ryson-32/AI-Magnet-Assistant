@@ -6,6 +6,7 @@ use crate::llm_service::LlmClient;
 // 引入需要的模块
 mod searcher;
 mod app_state;
+mod i18n;
 
 use tauri::Manager;
 use regex::Regex;
@@ -85,7 +86,7 @@ fn create_search_core(
     let final_clmclm_status = include_clmclm && clmclm_is_enabled_in_settings;
 
     if custom_engine_tuples.is_empty() && !final_clmclm_status {
-        return Err("No search engines available for this operation.".to_string());
+        return Err(i18n::translate_error(&i18n::ErrorCode::SearchNoEngines));
     }
 
     println!(
@@ -106,6 +107,8 @@ fn create_search_core(
 // ============ AI分析命令 ============
 
 /// 统一的标题清理函数
+/// 用途：在第二阶段（分析后）回填标题时，做最少量的清理，保持人类可读性。
+/// 注意：搜索阶段的文件名生成应使用 `extract_clean_title`（searcher.rs）以保证可预期的文件名格式。
 fn clean_title_unified(title: &str) -> String {
     if title.trim().is_empty() {
         return "Unknown".to_string();
@@ -875,6 +878,36 @@ async fn browse_for_file() -> Result<Option<String>, String> {
     }
 }
 
+// ============ 语言状态管理命令 ============
+
+#[tauri::command]
+async fn get_app_locale(state: tauri::State<'_, app_state::AppState>) -> Result<String, String> {
+    Ok(app_state::get_current_locale(&state))
+}
+
+#[tauri::command]
+async fn set_app_locale_with_persistence(
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, app_state::AppState>,
+    locale: String,
+) -> Result<(), String> {
+    // 设置后端国际化模块的语言
+    i18n::get_i18n_manager()
+        .set_locale(&locale)
+        .map_err(|e| e.to_string())?;
+    
+    // 保存到应用状态
+    app_state::set_current_locale(&state, locale.clone())
+        .map_err(|e| e.to_string())?;
+    
+    // 持久化到文件
+    app_state::save_app_state(&app_handle, &state)
+        .map_err(|e| e.to_string())?;
+    
+    println!("📝 语言设置已更新并持久化: {}", locale);
+    Ok(())
+}
+
 fn main() {
     tauri::Builder::default()
         .plugin(tauri_plugin_opener::init())
@@ -919,7 +952,16 @@ fn main() {
             get_download_config,
             update_download_config,
             open_magnet_link,
-            browse_for_file
+            browse_for_file,
+            // 国际化命令
+            i18n::get_system_locale,
+            i18n::set_app_locale,
+            i18n::get_current_locale,
+            i18n::get_supported_locales,
+            i18n::get_localized_message,
+            // 语言状态管理命令
+            get_app_locale,
+            set_app_locale_with_persistence
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -12,16 +12,16 @@ fn normalize_api_base(api_base: &str) -> String {
 
     // 如果是官方Gemini域名且没有包含/v1beta，则自动添加
     if trimmed_base == "https://generativelanguage.googleapis.com" {
-        format!("{}/v1beta", trimmed_base)
+        format!("{trimmed_base}/v1beta")
     } else if trimmed_base.starts_with("https://generativelanguage.googleapis.com") && !trimmed_base.contains("/v1beta") {
-        format!("{}/v1beta", trimmed_base)
+        format!("{trimmed_base}/v1beta")
     } else if (trimmed_base.starts_with("http://") || trimmed_base.starts_with("https://"))
         && !trimmed_base.contains("/v1beta")
         && !trimmed_base.contains("/api/")
         && !trimmed_base.contains("/v1/") {
         // 对于自定义代理服务器，如果没有包含API路径，尝试添加/v1beta
         // 这适用于Gemini Balance等代理服务
-        format!("{}/v1beta", trimmed_base)
+        format!("{trimmed_base}/v1beta")
     } else {
         // 对于其他URL（包括已经包含路径的自定义代理），保持原样但移除末尾斜杠
         trimmed_base.to_string()
@@ -76,14 +76,7 @@ pub struct DetailedAnalysisResult {
     pub error: Option<String>,   // 错误信息 (如果分析失败)
 }
 
-/// LLM为第二阶段分析返回的原始数据结构
-#[derive(Serialize, Deserialize, Debug)]
-struct LlmFileAnalysis {
-    pub original_filename: String, // 原始文件名，用于匹配
-    pub cleaned_title: String,     // 清理后的标题 (仅对主媒体文件有意义)
-    pub tags: Vec<String>,         // LLM生成的标签 (仅对主媒体文件有意义)
-    pub purity_score: u8,          // LLM计算的纯净度分数 (仅对主媒体文件有意义)
-}
+// （已移除未使用的 LlmFileAnalysis 结构体）
 
 /// 批量分析的输入项
 #[derive(Serialize, Deserialize, Debug, Clone)]
@@ -284,19 +277,19 @@ impl GeminiClient {
         if !response.status().is_success() {
             let status = response.status();
             let error_body = response.text().await.unwrap_or_default();
-            println!("❌ API请求失败: {} - {}", status, error_body);
+            println!("❌ API请求失败: {status} - {error_body}");
             return Err(anyhow::anyhow!("API请求失败: {}", error_body));
         }
 
         let gemini_response = response.json::<GeminiResponse>().await?;
-        if let Some(candidate) = gemini_response.candidates.get(0) {
-            if let Some(part) = candidate.content.parts.get(0) {
+        if let Some(candidate) = gemini_response.candidates.first() {
+            if let Some(part) = candidate.content.parts.first() {
                 let cleaned_text = part.text.trim().replace("```json", "").replace("```", "");
                 let result: BatchExtractBasicInfoResult = serde_json::from_str(&cleaned_text)
                     .map_err(|e| {
-                        println!("❌ JSON解析失败: {}", e);
+                        println!("❌ JSON解析失败: {e}");
                         println!("📄 原始AI响应: {}", part.text);
-                        println!("🧹 清理后文本: {}", cleaned_text);
+                        println!("🧹 清理后文本: {cleaned_text}");
                         anyhow::anyhow!(
                             "解析第一阶段JSON失败: {}. Raw text: {}",
                             e,
@@ -362,15 +355,14 @@ impl GeminiClient {
                 }
                 Err(e) => {
                     retry_count += 1;
-                    println!("❌ [DEBUG] Batch analysis failed on attempt {}: {}", retry_count, e);
+                    println!("❌ [DEBUG] Batch analysis failed on attempt {retry_count}: {e}");
 
                     if retry_count >= MAX_RETRIES {
                         println!("💥 [DEBUG] Max retries reached, giving up");
                         return Err(anyhow::anyhow!("批量分析失败，已重试{}次: {}", MAX_RETRIES, e));
                     }
 
-                    println!("⚠️ 批量分析失败，{}秒后重试 ({}/{}): {}",
-                             RETRY_DELAY_SECONDS, retry_count, MAX_RETRIES, e);
+                    println!("⚠️ 批量分析失败，{RETRY_DELAY_SECONDS}秒后重试 ({retry_count}/{MAX_RETRIES}): {e}");
 
                     tokio::time::sleep(tokio::time::Duration::from_secs(RETRY_DELAY_SECONDS)).await;
                     println!("🔄 [DEBUG] Retrying now...");
@@ -478,8 +470,8 @@ impl GeminiClient {
         }
 
         let gemini_response = response.json::<GeminiResponse>().await?;
-        if let Some(candidate) = gemini_response.candidates.get(0) {
-            if let Some(part) = candidate.content.parts.get(0) {
+        if let Some(candidate) = gemini_response.candidates.first() {
+            if let Some(part) = candidate.content.parts.first() {
                 let cleaned_text = part.text.trim().replace("```json", "").replace("```", "");
 
                 // 移除详细的响应日志以简化输出
@@ -528,7 +520,7 @@ pub async fn test_connection(config: &LlmConfig) -> Result<String> {
     );
 
     // 简化调试信息
-    println!("🔧 Testing connection to: {}", url);
+    println!("🔧 Testing connection to: {url}");
     let request_body = GeminiRequest {
         contents: vec![Content {
             parts: vec![Part {
@@ -541,11 +533,11 @@ pub async fn test_connection(config: &LlmConfig) -> Result<String> {
 
     let status = response.status();
     if status.is_success() {
-        println!("✅ Connection successful (Status: {}).", status);
+        println!("✅ Connection successful (Status: {status}).");
         Ok("连接成功".to_string())
     } else {
         let error_body = response.text().await.unwrap_or_default();
-        println!("❌ Connection failed (Status: {}): {}", status, error_body);
+        println!("❌ Connection failed (Status: {status}): {error_body}");
 
         // 为常见错误提供更友好的提示
         let error_message = match status.as_u16() {
@@ -554,7 +546,7 @@ pub async fn test_connection(config: &LlmConfig) -> Result<String> {
             404 => "API路径不存在：请检查API Base URL是否正确".to_string(),
             405 => "请求方法不允许：API路径可能不正确".to_string(),
             500 => "服务器内部错误：可能是API Key无效或模型名称错误".to_string(),
-            _ => format!("API连接失败 (状态码: {})", status),
+            _ => format!("API连接失败 (状态码: {status})"),
         };
 
         Err(anyhow::anyhow!("{}: {}", error_message, error_body))
