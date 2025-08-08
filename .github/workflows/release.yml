@@ -123,10 +123,18 @@ jobs:
         with:
           path: dist
 
-      - name: Generate SHA256 checksums
+      - name: Zip macOS .app bundles and generate SHA256 checksums
         run: |
           cd dist
-          find . -type f -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.app" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" | sort | xargs -I{} sha256sum "{}" >> SHA256SUMS.txt
+          # zip any .app directories first (spaces safe)
+          find . -type d -name "*.app" -print0 | while IFS= read -r -d '' app; do
+            zipName="${app}.zip"
+            echo "Zipping $app -> $zipName"
+            zip -r "$zipName" "$app" >/dev/null
+          done
+          # then compute checksums for files only (including .zip)
+          find . -type f \( -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \) -print0 | \
+            xargs -0 sha256sum >> SHA256SUMS.txt
           cat SHA256SUMS.txt
 
       - name: Create GitHub Release (draft, prerelease)
@@ -145,7 +153,7 @@ jobs:
             dist/**/*.msi
             dist/**/*.exe
             dist/**/*.dmg
-            dist/**/*.app
+            dist/**/*.zip
             dist/**/*.AppImage
             dist/**/*.deb
             dist/**/*.rpm
