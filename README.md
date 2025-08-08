@@ -10,7 +10,7 @@
 ## Key Features
 
 -   **Multi-Engine Search**: Performs parallel searches across multiple magnet link providers to ensure comprehensive results.
--   **AI-Driven Optimization**: Utilizes AI algorithms to analyze, score, and rank search results, prioritizing the most relevant and reliable links.
+-   **AI-Driven Optimization**: Uses an LLM to analyze, score, and rank results; cleans ads/noise from titles and normalizes them; auto-tags releases (e.g., `2160p`, `Chinese`, `Chinese Sub`, `WEB-DL`).
 -   **Invalid Link Filtering**: Automatically identifies and removes dead or invalid links, saving you time and effort.
 -   **Intuitive User Interface**: A clean, modern, and user-friendly interface built with Vue.js.
 -   **Cross-Platform Support**: Built with Tauri, allowing the application to run on Windows, macOS, and Linux from a single codebase.
