@@ -4,7 +4,7 @@ set -euo pipefail
 # Local Windows packaging helper (Git Bash compatible)
 # - Builds Tauri release
 # - Renames Windows artifacts to unified names:
-#   "<ProductName>_<version>_x64.msi" and "<ProductName>_<version>_x64.exe"
+#   "<ProductName>_<version>_x64-setup.msi" and "<ProductName>_<version>_x64-setup.exe"
 
 ROOT_DIR=$(cd -- "$(dirname -- "${BASH_SOURCE[0]}")/.." && pwd)
 cd "$ROOT_DIR"
@@ -21,20 +21,25 @@ fi
 MSI_DIR="src-tauri/target/release/bundle/msi"
 NSIS_DIR="src-tauri/target/release/bundle/nsis"
 
-# Normalize MSI name (remove locale suffix like _en-US)
+# Normalize MSI name to "-setup.msi" (remove locale suffix like _en-US)
 if compgen -G "$MSI_DIR/$PRODUCT_NAME_${VERSION}_x64_*.msi" > /dev/null; then
   MSI_SRC=$(ls "$MSI_DIR/$PRODUCT_NAME"_"${VERSION}"_x64_*.msi | head -n1)
-  MSI_DST="$MSI_DIR/$PRODUCT_NAME"_"${VERSION}"_x64.msi
+  MSI_DST="$MSI_DIR/$PRODUCT_NAME"_"${VERSION}"_x64-setup.msi
+  echo "Renaming MSI: $(basename "$MSI_SRC") -> $(basename "$MSI_DST")"
+  mv -f "$MSI_SRC" "$MSI_DST" || true
+elif [[ -f "$MSI_DIR/$PRODUCT_NAME"_"${VERSION}"_x64.msi ]]; then
+  MSI_SRC="$MSI_DIR/$PRODUCT_NAME"_"${VERSION}"_x64.msi
+  MSI_DST="$MSI_DIR/$PRODUCT_NAME"_"${VERSION}"_x64-setup.msi
   echo "Renaming MSI: $(basename "$MSI_SRC") -> $(basename "$MSI_DST")"
   mv -f "$MSI_SRC" "$MSI_DST" || true
 fi
 
-# Normalize NSIS name (drop -setup suffix)
-if [[ -f "$NSIS_DIR/$PRODUCT_NAME"_"${VERSION}"_x64-setup.exe ]]; then
-  EXE_SRC="$NSIS_DIR/$PRODUCT_NAME"_"${VERSION}"_x64-setup.exe
-  EXE_DST="$NSIS_DIR/$PRODUCT_NAME"_"${VERSION}"_x64.exe
-  echo "Copying NSIS: $(basename "$EXE_SRC") -> $(basename "$EXE_DST")"
-  cp -f "$EXE_SRC" "$EXE_DST"
+# Ensure NSIS name is "-setup.exe"
+if [[ -f "$NSIS_DIR/$PRODUCT_NAME"_"${VERSION}"_x64.exe && ! -f "$NSIS_DIR/$PRODUCT_NAME"_"${VERSION}"_x64-setup.exe ]]; then
+  EXE_SRC="$NSIS_DIR/$PRODUCT_NAME"_"${VERSION}"_x64.exe
+  EXE_DST="$NSIS_DIR/$PRODUCT_NAME"_"${VERSION}"_x64-setup.exe
+  echo "Renaming NSIS: $(basename "$EXE_SRC") -> $(basename "$EXE_DST")"
+  mv -f "$EXE_SRC" "$EXE_DST" || true
 fi
 
 echo "Done. Artifacts:"
