@@ -14,7 +14,8 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
-        os: [windows-latest, ubuntu-latest, macos-latest]
+        # 固定 runner 版本，避免官方镜像迁移提示与潜在不兼容
+        os: [windows-2022, ubuntu-24.04, macos-14]
 
     steps:
       - name: Checkout
@@ -35,6 +36,8 @@ jobs:
         uses: Swatinem/rust-cache@v2
         with:
           cache-all-crates: true
+          # 避免 cache miss 警告，提高命中率
+          shared-key: ai-magnet-assistant-${{ runner.os }}
 
       - name: Install Linux dependencies
         if: runner.os == 'Linux'
