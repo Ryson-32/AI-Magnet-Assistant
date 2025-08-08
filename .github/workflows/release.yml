@@ -118,6 +118,11 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Ensure zip and coreutils
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y zip coreutils
+
       - name: Download all artifacts
         uses: actions/download-artifact@v4
         with:
@@ -127,11 +132,11 @@ jobs:
         run: |
           cd dist
           # zip any .app directories first (spaces safe)
-          find . -type d -name "*.app" -print0 | while IFS= read -r -d '' app; do
+          while IFS= read -r -d '' app; do
             zipName="${app}.zip"
             echo "Zipping $app -> $zipName"
             zip -r "$zipName" "$app" >/dev/null
-          done
+          done < <(find . -type d -name "*.app" -print0)
           # then compute checksums for files only (including .zip)
           find . -type f \( -name "*.msi" -o -name "*.exe" -o -name "*.dmg" -o -name "*.zip" -o -name "*.AppImage" -o -name "*.deb" -o -name "*.rpm" \) -print0 | \
             xargs -0 sha256sum >> SHA256SUMS.txt
