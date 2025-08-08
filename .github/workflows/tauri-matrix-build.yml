@@ -58,12 +58,39 @@ jobs:
           choco install -y nsis || Write-Host "nsis install failed, continuing"
           choco install -y wixtoolset || Write-Host "wixtoolset install failed, continuing"
 
+      - name: Add WiX/NSIS to PATH (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          $wixDir = Get-ChildItem "C:\\Program Files (x86)" -Filter "WiX Toolset v*" -Directory | Sort-Object Name -Descending | Select-Object -First 1
+          if ($wixDir) {
+            "$($wixDir.FullName)\\bin" | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          }
+          $nsisBin = "C:\\Program Files (x86)\\NSIS\\Bin"
+          if (Test-Path $nsisBin) {
+            $nsisBin | Out-File -FilePath $env:GITHUB_PATH -Append -Encoding utf8
+          }
+
+      - name: Show tool versions (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        run: |
+          where candle.exe || echo "candle not found"
+          where light.exe || echo "light not found"
+          where makensis.exe || echo "makensis not found"
+          rustc -V
+          cargo -V
+          node -v
+          npm -v
+
       - name: Install frontend dependencies
         run: npm ci
 
       - name: Build Tauri app
         env:
           CI: true
+          TAURI_SKIP_SIGNING: "1"
+          RUST_BACKTRACE: "1"
         run: npm run tauri build
 
       - name: Normalize Windows artifact names
@@ -86,4 +113,13 @@ jobs:
             src-tauri/target/release/bundle/**/*.AppImage
             src-tauri/target/release/bundle/**/*.deb
             src-tauri/target/release/bundle/**/*.rpm
+
+      - name: Upload build logs on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-logs-${{ matrix.os }}
+          path: |
+            target/**/bundle/**/bundle.log
+            src-tauri/target/**/bundle/**/bundle.log
 
