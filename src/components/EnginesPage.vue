@@ -496,7 +496,7 @@ function generateUrlTemplate(url1: string, url2: string): string {
     fallbackTemplate = fallbackTemplate.replace(/(\W|^)1(\W|$)/g, '$1{page}$2');
 
     // Replace page numbers in query parameters
-    fallbackTemplate = fallbackTemplate.replace(/[&?]page=1/, '&page={page}');
+    fallbackTemplate = fallbackTemplate.replace(/([?&])page=1/, '$1page={page}');
 
     console.log("🔄 Fallback template:", fallbackTemplate);
     return fallbackTemplate;

@@ -143,8 +143,8 @@ async function quickDownload(magnetLink: string | undefined) {
     <div v-if="fileList && fileList.length > 0" class="file-list-section">
       <div class="file-grid">
         <div
-          v-for="(file, index) in fileList.slice(0, 7)"
-          :key="index"
+          v-for="file in fileList.slice(0, 7)"
+          :key="file"
           class="file-item"
           :title="file"
         >
