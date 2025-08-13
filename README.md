@@ -12,8 +12,6 @@
 
 <em>If this project helps you, please give it a ⭐!</em>
 
-<sub>Disclaimer: Most of the code in this project was completed with the assistance of AI Development Tools. If you are interested in these AI tools, you are welcome to visit <a href="https://ai.pu.edu.kg/">https://ai.pu.edu.kg/</a> to rate and review them.</sub>
-
 ###
 
 **AI Magnet Assistant** is an intelligent magnet link search and optimization tool built with Rust, Tauri, and Vue 3. It aggregates results from multiple engines, enhances non-structured pages with AI, and helps you rank and curate clean results.
@@ -32,10 +30,9 @@
 
 ## Screenshots 🖼️
 
-<!-- Replace the following placeholders with your actual screenshots -->
-<!-- <img width="1280" alt="screenshot-1" src="..." /> -->
-<!-- <img width="1280" alt="screenshot-2" src="..." /> -->
-<!-- <img width="1280" alt="screenshot-3" src="..." /> -->
+<img width="1282" height="992" alt="image" src="https://github.com/user-attachments/assets/c8be8473-801e-4fac-b4d0-4ace9b0b9972" />
+<img width="1282" height="992" alt="image" src="https://github.com/user-attachments/assets/d2ff6cc9-93d8-4090-886b-a50901025c80" />
+<img width="1282" height="992" alt="image" src="https://github.com/user-attachments/assets/9cb651cc-915c-4670-ae76-9f274d4dd19c" />
 
 ## How It Works ⚙️
 
