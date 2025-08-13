@@ -1,78 +1,126 @@
-[English](README.md)
-**声明:** 本项目的大部分代码是在 AI Development Tools 的辅助下完成的。如果您对这些 AI 工具有兴趣，欢迎访问 [https://ai.pu.edu.kg/](https://ai.pu.edu.kg/) 为它们打分和评价。
+<!-- markdownlint-disable MD033 MD041 -->
+<div align="center">
+  <h1>AI Magnet Assistant（AI 磁力助手）</h1>
+  <p>
+    <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License"></a>
+    <img src="https://img.shields.io/badge/platform-%E8%B7%A8%E5%B9%B3%E5%8F%B0-lightgrey.svg" alt="Platform: Windows/macOS/Linux">
+    <img src="https://img.shields.io/badge/version-1.2.0-green.svg" alt="Version 1.2.0">
+  </p>
+  <p><strong><a href="README.md">English</a> | <a href="README.zh-CN.md">中文</a></strong></p>
+</div>
+<!-- markdownlint-enable MD033 MD041 -->
 
-# AI Magnet Assistant (AI 磁力助手)
+<em>如果这个项目对你有帮助，别忘了点个 ⭐！</em>
 
-## 项目简介
+<sub>声明：本项目的大部分代码是在 AI Development Tools 的辅助下完成的。如果您对这些 AI 工具有兴趣，欢迎访问 <a href="https://ai.pu.edu.kg/">https://ai.pu.edu.kg/</a> 为它们打分和评价。</sub>
 
-**AI Magnet Assistant** 是一款基于 Rust、Tauri 和 Vue.js 构建的智能磁力链接搜索与优化工具。它利用 AI 的强大能力，通过聚合多个搜索引擎的结果、过滤无效链接并对其进行质量排名。
+**AI Magnet Assistant** 是一款基于 Rust、Tauri、Vue 3 构建的智能磁力搜索与优化工具。它聚合多引擎结果，对非结构化页面使用 AI 提取并清洗标题/标签/分数，帮助你更快找到“干净”的结果。
 
-## 主要功能
+## 亮点与场景 ⭐
 
--   **多引擎聚合搜索**: 同时检索多个资源站点，自动去重与合并结果。
--   **AI 结果优化**: 接入 LLM 对结果进行分析、评分和排序；对标题去广告并规范化，自动打标签（如 `2160p`、`Chinese`、`Chinese Sub`、`WEB-DL`）。
--   **无效链接过滤**: 自动剔除失效、重复、低质量链接。
--   **关键词优先**: 含指定关键词的条目优先展示（如 4K、中文字幕）。
--   **收藏与集中下载**: 一键收藏搜索结果，统一查看与下载。
--   **一键下载**: 支持跳转到你的常用下载器或 115 离线下载页面，可配置自动关闭。
--   **可扩展搜索引擎**: 内置稳定引擎，支持添加自定义站点；已优化自定义站点的网页抓取逻辑。
--   **批量分析与回退**: 批量并行分析，失败时自动降级为单项分析，并实时展示进度。
--   **国际化（i18n）**: 支持中英双语，运行时切换并持久化到后端。
--   **跨平台**: Windows、Linux、macOS（Linux/macOS 构建可用，暂未在真机全面测试）。
--   **双阶段 AI 配置**: 将 HTML 提取与内容分析的模型/地址/API Key 分离配置，并提供连通性测试按钮。
+- **解决痛点**：页面结构混乱、标题噪音多；结果质量参差；需要大量手动筛选。
+- **主要技术**：Tauri + Rust（后端/系统集成）、Vue 3 + TypeScript（前端与 i18n）、Gemini（LLM）。
+- **核心功能**：
+  - 多引擎编排：内置搜索引擎优先，其它引擎并发；搜索状态实时显示所用模型。
+  - 双阶段 AI：阶段一 HTML 提取（面向自定义引擎）→ 阶段二内容分析（标题清洗、标签、纯净度 0–100），并行批量且失败自动回退。
+  - 收藏与集中下载；优先级关键词；按分数/大小排序；快速复制/打开来源链接。
+  - 国际化；两阶段分别配置 Provider/API Base/Model，并提供独立测试按钮。
+  - 下载集成（具有离线下载功能的浏览器）；自定义应用路径与可选自动关闭页面。
+- **适用场景**：聚合搜索、降噪与标签化、收藏与集中下载、扩展新站点。
 
-## 如何开始
+## 软件截图 🖼️
 
-### 环境要求
+<!-- 将以下占位替换为你的实际截图 -->
+<!-- <img width="1280" alt="screenshot-1" src="..." /> -->
+<!-- <img width="1280" alt="screenshot-2" src="..." /> -->
+<!-- <img width="1280" alt="screenshot-3" src="..." /> -->
 
--   [Node.js](https://nodejs.org/zh-cn/)
--   [Rust](https://www.rust-lang.org/zh-CN/tools/install)
+## 软件原理 ⚙️
 
-### 安装步骤
+### 搜索编排
 
-1.  克隆代码仓库：
-    ```bash
-    git clone https://github.com/Ryson-32/AI-Magnet-Assistant.git
-    cd AI-Magnet-Assistant
-    ```
+- **内置引擎优先**：如启用，先返回内置搜索引擎结果，再合并其他引擎；UI 持续推送状态。
 
-2.  安装依赖：
-    ```bash
-    npm install
-    ```
+### 双阶段 AI（面向自定义引擎与分析）
 
-### 开发模式运行
+1. **HTML 内容提取**：后端通过 Gemini 从原始 HTML 中提取条目，返回基础字段。API 基础地址与模型均可配置。
+2. **内容分析**：前端并行批量清洗标题、计算纯净度分与生成标签。失败自动回退为单项分析，过程状态实时更新。
 
-在开发模式下运行应用，支持热重载：
+### 持久化
+
+- 所有配置与数据（引擎、收藏、优先级关键词、AI 配置、语言等）保存在 `app_data.json`。可在设置 → 数据 中打开目录。
+
+## 注意事项 📝
+
+说明：当前后端实现支持 Google Gemini。UI 中的 OpenAI 选项可见，但后端暂未接入。
+
+- **gemini-2.5-flash**：推荐用于 HTML 提取（阶段一）。
+- **gemini-2.5-flash-lite**：推荐用于内容分析（阶段二），更快更省。
+
+实际速度取决于网络与页面复杂度；批量分析并行执行并具备自动回退机制。
+
+## 使用流程 🧭
+
+1. **初始化**
+   - 进入设置 → AI 配置，分别填写提取与分析的 API Base、Model、API Key，并使用“测试”按钮验证；
+   - 在“搜索引擎”中按模板或示例添加自定义站点；
+   - 配置下载（应用路径、快速下载、自动关闭）与语言。
+
+2. **开始搜索**
+   - 在首页输入关键词，选择页数与开关项（AI 过滤、标题必须包含关键词）。
+   - 内置搜索引擎结果先到，随后并入其他引擎；分析会精简标题/打标签/计算分数。
+
+3. **整理运营**
+   - 按分数/大小排序；加入收藏；维护优先级关键词提升命中；打开来源页；复制/打开磁力链接。
+
+## 部署说明 🛠️
+
+### 依赖
+
+- Node.js 18+
+- Rust（稳定版）
+- Tauri CLI
+
+### 克隆
+
+```bash
+git clone https://github.com/Ryson-32/AI-Magnet-Assistant.git
+cd AI-Magnet-Assistant
+```
+
+### 安装
+
+```bash
+npm install
+npm install -g @tauri-apps/cli
+```
+
+### 运行（开发）
 
 ```bash
 npm run tauri dev
 ```
 
-仅启动前端用于 UI 开发：
+仅前端：
 
 ```bash
 npm run vite:dev
 ```
 
-### 构建应用
-
-为当前平台构建可执行的应用：
+### 构建
 
 ```bash
 npm run tauri build
 ```
 
-## 国际化
+## 已知问题 🐞
 
-- 默认语言：简体中文（`zh-CN`）
-- 支持语言：`zh-CN`、`en`
-- 可在“设置”（或开启“调试区域”后在页面顶部）切换语言；选择会持久化并在启动时恢复。
+- 后端当前未接入 OpenAI，需使用 Gemini。
+- 部分站点为强 JS/反爬，HTML 可能为 JS 或乱码时会降级或产出有限结果；日志中会打印诊断预览。
+- 速率限制可能导致分析失败；设置页提供速率限制信息与建议（如 gemini-balance）。
+- 自定义下载程序“快速下载”功能仅在 Windows 下可用。
 
-## 版本与更新
+## 许可证 📄
 
-详见 `docs/RELEASES.md`。当前版本：1.2.0。
+MIT 许可证，详见 [LICENSE](LICENSE)。
 
-## 许可证
-
-本项目采用 **MIT 许可证**。详情请参阅 [LICENSE](LICENSE) 文件。
