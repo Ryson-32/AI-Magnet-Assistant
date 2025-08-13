@@ -18,15 +18,14 @@
 
 ## Highlights & Use Cases ⭐
 
-- **Pain points solved**: Unstructured HTML and noisy titles; mixed-quality results; manual curation effort.
-- **Tech stack**: Tauri + Rust (backend/system integration), Vue 3 + TypeScript (frontend & i18n).
+- **Pain points**: Messy page structure and noisy titles; uneven result quality; heavy manual filtering.
+- **Tech stack**: Tauri + Rust (backend/system), Vue 3 + TypeScript (frontend).
 - **Core features**:
-  - Multi-engine orchestration: built-in engine first, others concurrently; live status shows the model used.
-  - Two-phase AI: Stage 1 HTML extraction for custom engines → Stage 2 content analysis (clean titles, tags, purity score 0–100) with parallel batching and fallback.
-  - Favorites & centralized download; priority keywords; sort by score/size; quick copy/open source link.
-  - Internationalization; configurable provider/API base/model per stage with per-field Test buttons.
-  - Download integrations for browsers with offline download capability; custom application path and optional auto-close page.
-- **Use cases**: Aggregated magnet search, noise reduction and tagging, curation with favorites and centralized downloads, extending engines for new sites.
+  - Multi-engine aggregation: built-in engine first, others in parallel; real-time status shows the model in use.
+  - Two-stage AI: Stage 1 HTML extraction (for custom engines) → Stage 2 content analysis (title cleaning, tags, purity 0–100).
+  - Efficiency & management: Favorites and centralized download; priority keywords; sort by score/size; quick copy/open source link.
+  - Download integration: quick download via custom application path.
+- **Use cases**: Aggregated search; noise reduction and tagging; magnet favorites and centralized downloads.
 
 ## Screenshots 🖼️
 
