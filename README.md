@@ -14,12 +14,12 @@
 
 ###
 
-**AI Magnet Assistant** is an intelligent magnet link search and optimization tool built with Rust, Tauri, and Vue 3. It aggregates results from multiple engines, enhances non-structured pages with AI, and helps you rank and curate clean results.
+**AI Magnet Assistant** is an intelligent magnet link search and optimization tool. It aggregates results from multiple engines, enhances non-structured pages with AI, and helps you rank and curate clean results.
 
 ## Highlights & Use Cases ⭐
 
 - **Pain points solved**: Unstructured HTML and noisy titles; mixed-quality results; manual curation effort.
-- **Tech stack**: Tauri + Rust (backend/system integration), Vue 3 + TypeScript (frontend & i18n), Gemini (LLM provider).
+- **Tech stack**: Tauri + Rust (backend/system integration), Vue 3 + TypeScript (frontend & i18n).
 - **Core features**:
   - Multi-engine orchestration: built-in engine first, others concurrently; live status shows the model used.
   - Two-phase AI: Stage 1 HTML extraction for custom engines → Stage 2 content analysis (clean titles, tags, purity score 0–100) with parallel batching and fallback.
