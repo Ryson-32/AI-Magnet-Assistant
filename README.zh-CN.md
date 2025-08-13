@@ -12,8 +12,6 @@
 
 <em>如果这个项目对你有帮助，别忘了点个 ⭐！</em>
 
-<sub>声明：本项目的大部分代码是在 AI Development Tools 的辅助下完成的。如果您对这些 AI 工具有兴趣，欢迎访问 <a href="https://ai.pu.edu.kg/">https://ai.pu.edu.kg/</a> 为它们打分和评价。</sub>
-
 **AI Magnet Assistant** 是一款基于 Rust、Tauri、Vue 3 构建的智能磁力搜索与优化工具。它聚合多引擎结果，对非结构化页面使用 AI 提取并清洗标题/标签/分数，帮助你更快找到“干净”的结果。
 
 ## 亮点与场景 ⭐
@@ -30,10 +28,9 @@
 
 ## 软件截图 🖼️
 
-<!-- 将以下占位替换为你的实际截图 -->
-<!-- <img width="1280" alt="screenshot-1" src="..." /> -->
-<!-- <img width="1280" alt="screenshot-2" src="..." /> -->
-<!-- <img width="1280" alt="screenshot-3" src="..." /> -->
+<img width="1282" height="992" alt="image" src="https://github.com/user-attachments/assets/2374719b-d91b-45b4-aa82-25b76a1b4ebb" />
+<img width="1282" height="992" alt="image" src="https://github.com/user-attachments/assets/098f1115-a048-40cc-aab9-37e4670d446c" />
+<img width="1282" height="992" alt="image" src="https://github.com/user-attachments/assets/153cd245-20bc-4c7c-816f-af709a591b52" />
 
 ## 软件原理 ⚙️
 
