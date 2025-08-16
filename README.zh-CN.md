@@ -27,7 +27,7 @@
 
 ## 软件截图 🖼️
 
-<img width="1282" height="992" alt="image" src="https://github.com/user-attachments/assets/2374719b-d91b-45b4-aa82-25b76a1b4ebb" />
+<img width="1282" height="992" alt="image" src="https://github.com/user-attachments/assets/2297f7cb-720f-4f90-9df5-bddd94685fbd" />
 <img width="1282" height="992" alt="image" src="https://github.com/user-attachments/assets/098f1115-a048-40cc-aab9-37e4670d446c" />
 <img width="1282" height="992" alt="image" src="https://github.com/user-attachments/assets/153cd245-20bc-4c7c-816f-af709a591b52" />
 
