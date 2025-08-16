@@ -118,7 +118,8 @@ impl SearchProvider for ClmclmProvider {
     }
 
     async fn search(&self, query: &str, page: u32) -> Result<Vec<SearchResult>> {
-        let url = format!("{}/search-{}-1-1-{}.html", self.base_url, query, page);
+        let encoded_query = urlencoding::encode(query);
+        let url = format!("{}/search-{}-1-1-{}.html", self.base_url, encoded_query, page);
         search_log!(info, "Searching: {}", url);
 
         let response = self.client

@@ -57,7 +57,7 @@
         </div>
       </div>
       <div class="results-grid">
-        <div v-for="(result, index) in results" :key="index" class="result-item-wrapper">
+        <div v-for="result in results" :key="result.magnet_link || result.source_url || result.title" class="result-item-wrapper">
           <ResultCard
             :title="result.title"
             :original-title="result.originalTitle"
