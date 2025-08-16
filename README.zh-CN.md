@@ -75,7 +75,6 @@
 
 - Node.js 18+
 - Rust（稳定版）
-- Tauri CLI
 
 ### 克隆
 
@@ -88,13 +87,12 @@ cd AI-Magnet-Assistant
 
 ```bash
 npm install
-npm install -g @tauri-apps/cli
 ```
 
 ### 运行（开发）
 
 ```bash
-npm run tauri dev
+npm run dev
 ```
 
 仅前端：
@@ -106,7 +104,7 @@ npm run vite:dev
 ### 构建
 
 ```bash
-npm run tauri build
+npx tauri build
 ```
 
 ## 已知问题 🐞
@@ -119,4 +117,3 @@ npm run tauri build
 ## 许可证 📄
 
 MIT 许可证，详见 [LICENSE](LICENSE)。
-

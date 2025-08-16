@@ -78,7 +78,6 @@ Actual speed depends on network and page complexity; batch analysis is parallel 
 
 - Node.js 18+
 - Rust (latest stable)
-- Tauri CLI
 
 #### Clone
 
@@ -91,13 +90,12 @@ cd AI-Magnet-Assistant
 
 ```bash
 npm install
-npm install -g @tauri-apps/cli
 ```
 
 #### Run (development)
 
 ```bash
-npm run tauri dev
+npm run dev
 ```
 
 Frontend only:
@@ -109,7 +107,7 @@ npm run vite:dev
 #### Build
 
 ```bash
-npm run tauri build
+npx tauri build
 ```
 
 ## Known Issues 🐞
@@ -122,4 +120,3 @@ npm run tauri build
 ## License 📄
 
 MIT License. See the [LICENSE](LICENSE).
-
