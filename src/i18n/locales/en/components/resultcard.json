@@ -20,7 +20,8 @@
       },
       "messages": {
         "downloadStarted": "Download started successfully!",
-        "downloadFailed": "Failed to start download: {error}"
+        "downloadFailed": "Failed to start download: {error}",
+        "invalidSourceUrl": "The source URL is invalid or unsupported"
       }
     }
   }

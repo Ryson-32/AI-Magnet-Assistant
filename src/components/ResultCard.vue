@@ -69,7 +69,16 @@ function addToFavorites() {
 
 function openSourceUrl() {
   if (props.sourceUrl) {
-    window.open(props.sourceUrl, '_blank');
+    try {
+      const url = new URL(props.sourceUrl);
+      if (url.protocol === 'http:' || url.protocol === 'https:') {
+        window.open(url.toString(), '_blank', 'noopener,noreferrer');
+      } else {
+        emit('showNotification', t('components.resultCard.messages.invalidSourceUrl'), 'error');
+      }
+    } catch {
+      emit('showNotification', t('components.resultCard.messages.invalidSourceUrl'), 'error');
+    }
   }
 }
 

@@ -65,6 +65,44 @@
                 <span :class="['status-badge', engine.is_enabled ? 'enabled' : 'disabled']">
                   {{ engine.is_enabled ? $t('pages.engines.engine.enabled') : $t('pages.engines.engine.disabled') }}
                 </span>
+                <span class="default-badge">{{ engine.engine_type === 'prowlarr' ? 'Prowlarr' : 'Legacy HTML' }}</span>
+                <span v-if="engine.engine_type === 'prowlarr'" :class="['status-badge', engine.allow_adult ? 'adult-enabled' : 'enabled']">
+                  {{ engine.allow_adult ? $t('pages.engines.engine.adultEnabled') : $t('pages.engines.engine.adultDisabled') }}
+                </span>
+              </div>
+              <div v-if="engine.engine_type === 'prowlarr'" class="prowlarr-controls">
+                <label class="inline-toggle">
+                  <input
+                    type="checkbox"
+                    :checked="engine.allow_adult"
+                    @change="toggleAdult(engine.id, ($event.target as HTMLInputElement).checked)"
+                  />
+                  <span>{{ $t('pages.engines.engine.allowAdultToggle') }}</span>
+                </label>
+                <button class="edit-btn indexer-manage-btn" @click="loadRecommendedForEngine(engine)">
+                  {{ $t('pages.engines.engine.manageIndexers') }}
+                </button>
+              </div>
+              <div v-if="managingEngineId === engine.id" class="recommended-indexers">
+                <div class="indexer-summary">
+                  <span>{{ $t('pages.engines.add.form.configuredCount', { count: configuredIndexerCount }) }}</span>
+                </div>
+                <h4 class="indexer-section-title">{{ $t('pages.engines.add.form.configuredIndexers') }}</h4>
+                <div class="indexer-grid">
+                  <label v-for="indexer in configuredIndexers" :key="indexer.name" :class="['indexer-option', 'configured', { disabled: !indexer.enabled }]">
+                    <input
+                      class="indexer-enable-checkbox"
+                      type="checkbox"
+                      :checked="indexer.enabled"
+                      @change="toggleProwlarrIndexer(engine, indexer, ($event.target as HTMLInputElement).checked)"
+                    />
+                    <span class="indexer-name">{{ indexer.name }}</span>
+                    <span :class="['indexer-mini-badge', indexer.enabled ? 'enabled' : 'disabled']">
+                      {{ indexer.enabled ? $t('pages.engines.engine.enabled') : $t('pages.engines.engine.disabled') }}
+                    </span>
+                    <span class="indexer-mini-badge">{{ indexer.privacy || 'public' }}</span>
+                  </label>
+                </div>
               </div>
             </div>
 
@@ -130,6 +168,11 @@
           <input type="radio" v-model="addEngineMode" value="advanced" />
           <span class="radio-mark"></span>
           {{ $t('pages.engines.add.mode.advanced') }}
+        </label>
+        <label class="mode-option">
+          <input type="radio" v-model="addEngineMode" value="prowlarr" />
+          <span class="radio-mark"></span>
+          Prowlarr
         </label>
       </div>
 
@@ -220,6 +263,59 @@
             />
           </div>
         </div>
+
+        <div v-if="addEngineMode === 'prowlarr'" class="advanced-mode">
+          <p class="help-text">{{ $t('pages.engines.add.form.helpText.prowlarr') }}</p>
+          <ol class="setup-steps">
+            <li>{{ $t('pages.engines.add.form.prowlarrSteps.install') }}</li>
+            <li>{{ $t('pages.engines.add.form.prowlarrSteps.indexers') }}</li>
+            <li>{{ $t('pages.engines.add.form.prowlarrSteps.apiKey') }}</li>
+          </ol>
+          <div class="form-group">
+            <label for="prowlarrName">{{ $t('pages.engines.add.form.engineName') }}</label>
+            <input id="prowlarrName" v-model="newEngine.name" type="text" placeholder="Prowlarr" required />
+          </div>
+          <div class="form-group">
+            <label for="prowlarrUrl">Prowlarr URL</label>
+            <input id="prowlarrUrl" v-model="newEngine.urlTemplate" type="url" placeholder="http://127.0.0.1:9696" required />
+          </div>
+          <div class="form-group">
+            <label for="prowlarrApiKey">API Key</label>
+            <input id="prowlarrApiKey" v-model="newEngine.apiKey" type="password" required />
+          </div>
+          <div class="form-group">
+            <label for="prowlarrCategories">{{ $t('pages.engines.add.form.categories') }}</label>
+            <input id="prowlarrCategories" v-model="newEngine.categories" type="text" placeholder="2000, 5000" />
+          </div>
+          <label class="mode-option">
+            <input type="checkbox" v-model="newEngine.allowAdult" />
+            <span>{{ $t('pages.engines.add.form.allowAdult') }}</span>
+          </label>
+          <button type="button" class="add-btn secondary-btn" :disabled="isTestingProwlarr" @click="testProwlarrConnection">
+            {{ isTestingProwlarr ? $t('pages.engines.add.form.testingProwlarr') : $t('pages.engines.add.form.testProwlarr') }}
+          </button>
+          <p v-if="prowlarrTestMessage" :class="['help-text', prowlarrTestOk ? 'test-success' : 'test-error']">
+            {{ prowlarrTestMessage }}
+          </p>
+          <div v-if="recommendedIndexers.length > 0" class="recommended-indexers">
+            <h4>{{ $t('pages.engines.add.form.recommendedIndexers') }}</h4>
+            <p class="help-text">{{ $t('pages.engines.add.form.recommendedIndexersHelp') }}</p>
+            <div class="indexer-summary">
+              <span>{{ $t('pages.engines.add.form.configuredCount', { count: configuredIndexerCount }) }}</span>
+            </div>
+            <h4 class="indexer-section-title">{{ $t('pages.engines.add.form.configuredIndexers') }}</h4>
+            <div class="indexer-grid">
+              <label v-for="indexer in configuredIndexers" :key="indexer.name" :class="['indexer-option', 'configured', { disabled: !indexer.enabled }]">
+                <span class="indexer-state">{{ $t('pages.engines.add.form.configured') }}</span>
+                <span class="indexer-name">{{ indexer.name }}</span>
+                <span :class="['indexer-mini-badge', indexer.enabled ? 'enabled' : 'disabled']">
+                  {{ indexer.enabled ? $t('pages.engines.engine.enabled') : $t('pages.engines.engine.disabled') }}
+                </span>
+                <span class="indexer-mini-badge">{{ indexer.privacy || 'public' }}</span>
+              </label>
+            </div>
+          </div>
+        </div>
         
         <div class="form-actions">
           <button type="submit" :disabled="isAdding" class="add-btn">
@@ -247,6 +343,19 @@ interface SearchEngine {
   url_template: string;
   is_enabled: boolean;
   is_deletable: boolean;
+  engine_type: string;
+  api_key: string;
+  categories: number[];
+  allow_adult: boolean;
+}
+
+interface RecommendedIndexer {
+  id: number;
+  name: string;
+  configured: boolean;
+  available: boolean;
+  enabled: boolean;
+  privacy: string;
 }
 
 const engines = ref<SearchEngine[]>([]);
@@ -273,9 +382,20 @@ const editingEngine = ref<SearchEngine>({
   name: '',
   url_template: '',
   is_enabled: false,
-  is_deletable: false
+  is_deletable: false,
+  engine_type: 'legacy_html',
+  api_key: '',
+  categories: [],
+  allow_adult: false
 });
 const isSavingEdit = ref(false);
+const isTestingProwlarr = ref(false);
+const prowlarrTestMessage = ref('');
+const prowlarrTestOk = ref(false);
+const recommendedIndexers = ref<RecommendedIndexer[]>([]);
+const managingEngineId = ref<string | null>(null);
+const configuredIndexerCount = computed(() => recommendedIndexers.value.filter(indexer => indexer.configured).length);
+const configuredIndexers = computed(() => recommendedIndexers.value.filter(indexer => indexer.configured));
 
 const addEngineMode = ref('auto'); // 'advanced' or 'auto'
 
@@ -283,7 +403,10 @@ const newEngine = ref({
   name: '',
   urlExample1: '',
   urlExample2: '',
-  urlTemplate: ''
+  urlTemplate: '',
+  apiKey: '',
+  categories: '',
+  allowAdult: false
 });
 
 // ExampleBT 示例常量，避免 i18n 将 {keyword}/{page} 当作占位符吞掉
@@ -341,6 +464,17 @@ async function toggleEngine(id: string, isEnabled: boolean) {
   }
 }
 
+async function toggleAdult(id: string, allowAdult: boolean) {
+  try {
+    await invoke('update_engine_adult_status', { id, allowAdult });
+    const engine = engines.value.find(e => e.id === id);
+    if (engine) engine.allow_adult = allowAdult;
+  } catch (error) {
+    showNotification(String(error), 'error');
+    await loadEngines();
+  }
+}
+
 async function addEngine() {
   // Validation based on mode
   if (addEngineMode.value === 'advanced') {
@@ -359,18 +493,21 @@ async function addEngine() {
       showNotification(t('pages.engines.add.validation.pageRequired'), 'error');
       return;
     }
-  } else {
+  } else if (addEngineMode.value === 'auto') {
     if (!newEngine.value.name || !newEngine.value.urlExample1 || !newEngine.value.urlExample2) {
       showNotification(t('pages.engines.add.validation.fillAllFields'), 'error');
       return;
     }
+  } else if (!newEngine.value.name || !newEngine.value.urlTemplate || !newEngine.value.apiKey) {
+    showNotification(t('pages.engines.add.validation.fillAllFields'), 'error');
+    return;
   }
 
   isAdding.value = true;
   try {
     let urlTemplate: string;
 
-    if (addEngineMode.value === 'advanced') {
+    if (addEngineMode.value === 'advanced' || addEngineMode.value === 'prowlarr') {
       // Use the template directly
       urlTemplate = newEngine.value.urlTemplate;
     } else {
@@ -380,7 +517,11 @@ async function addEngine() {
 
     await invoke("add_search_engine", {
       name: newEngine.value.name,
-      urlTemplate
+      urlTemplate,
+      engineType: addEngineMode.value === 'prowlarr' ? 'prowlarr' : 'legacy_html',
+      apiKey: addEngineMode.value === 'prowlarr' ? newEngine.value.apiKey : '',
+      categories: parseCategories(newEngine.value.categories),
+      allowAdult: addEngineMode.value === 'prowlarr' && newEngine.value.allowAdult
     });
 
     // Reset form
@@ -388,7 +529,10 @@ async function addEngine() {
       name: '',
       urlExample1: '',
       urlExample2: '',
-      urlTemplate: ''
+      urlTemplate: '',
+      apiKey: '',
+      categories: '',
+      allowAdult: false
     };
 
     await loadEngines(); // Reload the list
@@ -399,6 +543,12 @@ async function addEngine() {
   } finally {
     isAdding.value = false;
   }
+}
+
+function parseCategories(value: string): number[] {
+  return value.split(',')
+    .map(item => Number.parseInt(item.trim(), 10))
+    .filter(item => Number.isFinite(item));
 }
 
 function generateUrlTemplate(url1: string, url2: string): string {
@@ -623,7 +773,11 @@ function cancelEditEngine() {
     name: '',
     url_template: '',
     is_enabled: false,
-    is_deletable: false
+    is_deletable: false,
+    engine_type: 'legacy_html',
+    api_key: '',
+    categories: [],
+    allow_adult: false
   };
 }
 
@@ -633,15 +787,16 @@ async function saveEditEngine() {
     return;
   }
 
-  // Validate template format
-  if (!editingEngine.value.url_template.includes('{keyword}')) {
-    showNotification(t('pages.engines.add.validation.keywordRequired'), 'error');
-    return;
-  }
+  if (editingEngine.value.engine_type !== 'prowlarr') {
+    if (!editingEngine.value.url_template.includes('{keyword}')) {
+      showNotification(t('pages.engines.add.validation.keywordRequired'), 'error');
+      return;
+    }
 
-  if (!editingEngine.value.url_template.includes('{page}') && !editingEngine.value.url_template.includes('{page-1}')) {
-    showNotification(t('pages.engines.add.validation.pageRequired'), 'error');
-    return;
+    if (!editingEngine.value.url_template.includes('{page}') && !editingEngine.value.url_template.includes('{page-1}')) {
+      showNotification(t('pages.engines.add.validation.pageRequired'), 'error');
+      return;
+    }
   }
 
   isSavingEdit.value = true;
@@ -649,7 +804,11 @@ async function saveEditEngine() {
     await invoke("update_search_engine", {
       id: editingEngine.value.id,
       name: editingEngine.value.name,
-      urlTemplate: editingEngine.value.url_template
+      urlTemplate: editingEngine.value.url_template,
+      engineType: editingEngine.value.engine_type,
+      apiKey: editingEngine.value.api_key,
+      categories: editingEngine.value.categories,
+      allowAdult: editingEngine.value.allow_adult
     });
 
     await loadEngines(); // Reload the list
@@ -662,6 +821,56 @@ async function saveEditEngine() {
     isSavingEdit.value = false;
   }
 }
+
+async function testProwlarrConnection() {
+  isTestingProwlarr.value = true;
+  prowlarrTestMessage.value = '';
+  try {
+    prowlarrTestMessage.value = await invoke('test_prowlarr_connection', {
+      url: newEngine.value.urlTemplate,
+      apiKey: newEngine.value.apiKey
+    });
+    prowlarrTestOk.value = true;
+    recommendedIndexers.value = await invoke('get_recommended_prowlarr_indexers', {
+      url: newEngine.value.urlTemplate,
+      apiKey: newEngine.value.apiKey
+    });
+  } catch (error) {
+    prowlarrTestMessage.value = String(error);
+    prowlarrTestOk.value = false;
+  } finally {
+    isTestingProwlarr.value = false;
+  }
+}
+
+async function loadRecommendedForEngine(engine: SearchEngine) {
+  try {
+    managingEngineId.value = engine.id;
+    recommendedIndexers.value = await invoke('get_recommended_prowlarr_indexers', {
+      url: engine.url_template,
+      apiKey: engine.api_key
+    });
+  } catch (error) {
+    showNotification(String(error), 'error');
+  }
+}
+
+async function toggleProwlarrIndexer(engine: SearchEngine, indexer: RecommendedIndexer, enabled: boolean) {
+  const previous = indexer.enabled;
+  indexer.enabled = enabled;
+  try {
+    await invoke('update_prowlarr_indexer_status', {
+      url: engine.url_template,
+      apiKey: engine.api_key,
+      indexerId: indexer.id,
+      enabled
+    });
+  } catch (error) {
+    indexer.enabled = previous;
+    showNotification(t('pages.engines.messages.updateStatusFailed', { error: String(error) }), 'error');
+  }
+}
+
 </script>
 
 <style scoped>
@@ -829,6 +1038,155 @@ async function saveEditEngine() {
 .status-badge.disabled {
   background: #fed7d7;
   color: #c53030;
+}
+
+.status-badge.adult-enabled {
+  background: rgba(220, 38, 38, 0.14);
+  color: #dc2626;
+}
+
+.setup-steps {
+  margin: 12px 0 20px;
+  padding-left: 24px;
+  line-height: 1.7;
+}
+
+.secondary-btn {
+  margin-top: 16px;
+}
+
+.test-success {
+  color: #16a34a;
+}
+
+.test-error {
+  color: #dc2626;
+}
+
+.inline-toggle,
+.indexer-option {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.prowlarr-controls {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+
+.prowlarr-controls .inline-toggle {
+  flex: 0 0 auto;
+}
+
+.recommended-indexers {
+  margin-top: 20px;
+  padding: 16px;
+  border: 1px solid rgba(128, 128, 128, 0.25);
+  border-radius: 10px;
+}
+
+.indexer-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-bottom: 12px;
+  color: #475569;
+  font-size: 13px;
+}
+
+.indexer-summary span {
+  padding: 4px 8px;
+  border-radius: 999px;
+  background: #f1f5f9;
+}
+
+.indexer-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+  gap: 8px;
+  max-height: 420px;
+  overflow: auto;
+  padding-right: 4px;
+}
+
+.indexer-section-title {
+  margin: 14px 0 10px;
+  font-size: 14px;
+  color: #334155;
+}
+
+.recommended-indexers .indexer-option {
+  display: flex;
+  min-width: 0;
+  margin: 0;
+  padding: 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #fff;
+}
+
+.recommended-indexers .indexer-option.configured {
+  background: #f8fafc;
+}
+
+.recommended-indexers .indexer-option.disabled {
+  opacity: 0.68;
+}
+
+.indexer-enable-checkbox {
+  flex: 0 0 auto;
+  width: 16px;
+  height: 16px;
+}
+
+.indexer-state {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: 6px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 12px;
+  text-align: center;
+}
+
+.indexer-name {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.indexer-mini-badge {
+  flex: 0 0 auto;
+  padding: 2px 6px;
+  border-radius: 999px;
+  background: #e2e8f0;
+  color: #475569;
+  font-size: 11px;
+}
+
+.indexer-mini-badge.enabled {
+  background: #dcfce7;
+  color: #15803d;
+}
+
+.indexer-mini-badge.disabled {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.indexer-manage-btn {
+  width: max-content;
+  max-width: 100%;
+  margin-top: 0;
+  padding: 8px 12px;
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .switch {

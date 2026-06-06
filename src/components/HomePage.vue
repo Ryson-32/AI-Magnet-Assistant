@@ -217,6 +217,24 @@ function parseSizeToBytes(sizeStr: string): number {
   return value * (multipliers[unit] || 1);
 }
 
+function normalizeSearchResults(input: any[]): any[] {
+  const query = keyword.value.trim().toLowerCase();
+  const seen = new Set<string>();
+
+  return input.filter((result: any) => {
+    if (titleMustContainKeyword.value && query && !String(result.title || '').toLowerCase().includes(query)) {
+      return false;
+    }
+
+    const magnet = String(result.magnet_link || '');
+    const btih = magnet.match(/urn:btih:([^&]+)/i)?.[1]?.toLowerCase();
+    const key = btih || magnet.toLowerCase() || String(result.source_url || result.title || '');
+    if (seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 async function onSortChange() {
   await sortResults(results.value);
 }
@@ -250,7 +268,7 @@ async function search() {
     const enabledEngines = engines.filter((e: any) => e.is_enabled);
 
     // Check if AI will be used for HTML extraction
-    const hasCustomEngines = enabledEngines.some((e: any) => e.name !== "clmclm.com");
+    const hasCustomEngines = enabledEngines.some((e: any) => e.engine_type !== "prowlarr");
     const hasExtractionConfig = llmConfig?.extraction_config?.api_key;
     const willUseAI = hasCustomEngines && hasExtractionConfig;
 
@@ -263,107 +281,29 @@ async function search() {
 
     searchStatus.value = t('pages.home.search.status.searchingWithModel', { modelInfo });
 
-    // 并行启动两个搜索
-    const clmclmPromise = invoke("search_clmclm_first", {
+    const searchResults = await invoke("search_multi_page", {
       keyword: keyword.value,
       maxPages: maxPages.value
-    });
+    }) as any[];
 
-    const otherEnginesPromise = invoke("search_other_engines", {
-      keyword: keyword.value,
-      maxPages: maxPages.value
-    });
-
-    // 等待clmclm результат（通常更快）
-    try {
-      const clmclmResults = await clmclmPromise;
-
-      // 检查搜索是否被取消
-      if (isSearchCancelled()) {
-        console.log('Search cancelled after clmclm results');
-        return;
-      }
-
-      // 立即显示clmclm结果
-      if (clmclmResults && (clmclmResults as any[]).length > 0) {
-        results.value = clmclmResults as any[];
-        searchStatus.value = t('pages.home.search.status.foundFromEngine', { 
-          count: results.value.length, 
-          engine: 'clmclm.com',
-          modelInfo 
-        });
-
-        // 立即排序和分析clmclm结果
-        await sortResults(results.value);
-
-        if (useSmartFilter.value && results.value.length > 0) {
-          // 再次检查搜索是否被取消
-          if (isSearchCancelled()) {
-            console.log('Search cancelled before clmclm analysis');
-            return;
-          }
-          searchStatus.value = t('pages.home.search.status.analyzingWithModel', { modelInfo });
-          await analyzeResults();
-          await sortResults(results.value);
-        }
-      }
-    } catch (error) {
-      console.log('clmclm search failed:', error);
-      searchStatus.value = t('pages.home.search.status.engineFailed', { engine: 'clmclm.com', modelInfo });
-    }
-
-    // 等待其他引擎结果
-    try {
-      const otherResults = await otherEnginesPromise;
-
-      // 检查搜索是否被取消
-      if (isSearchCancelled()) {
-        console.log('Search cancelled after other engines results');
-        return;
-      }
-
-      // 合并其他引擎的结果
-      if (otherResults && (otherResults as any[]).length > 0) {
-        const allResults = [...results.value, ...(otherResults as any[])];
-        results.value = allResults;
-        searchStatus.value = t('pages.home.search.status.completeWithCount', { 
-          count: results.value.length,
-          modelInfo 
-        });
-
-        // 重新排序所有结果
-        await sortResults(results.value);
-
-        // 如果启用了智能过滤，分析新增的结果
-        if (useSmartFilter.value && (otherResults as any[]).length > 0) {
-          // 再次检查搜索是否被取消
-          if (isSearchCancelled()) {
-            console.log('Search cancelled before additional analysis');
-            return;
-          }
-          searchStatus.value = t('pages.home.search.status.analysisPartial', { modelInfo });
-          await analyzeResults();
-          await sortResults(results.value);
-        }
-      }
-    } catch (error) {
-      console.log('Other engines search failed:', error);
-    }
-
-    // 最终检查搜索是否被取消
     if (isSearchCancelled()) {
-      console.log('Search cancelled before final status');
+      console.log('Search cancelled after engine results');
       return;
     }
 
-    // 最终状态 - 如果没有启用智能过滤或没有进行分析，显示基本搜索完成状态
-    if (!useSmartFilter.value || results.value.length === 0) {
-      searchStatus.value = t('pages.home.search.status.completeWithCount', { 
+    results.value = normalizeSearchResults(searchResults || []);
+    await sortResults(results.value);
+
+    if (useSmartFilter.value && results.value.length > 0) {
+      searchStatus.value = t('pages.home.search.status.analyzingWithModel', { modelInfo });
+      await analyzeResults();
+      await sortResults(results.value);
+    } else {
+      searchStatus.value = t('pages.home.search.status.completeWithCount', {
         count: results.value.length,
-        modelInfo 
+        modelInfo
       });
     }
-    // 如果启用了智能过滤并且有结果，analyzeResults() 已经设置了包含分析信息的最终状态，不要覆盖它
 
   } catch (error) {
     console.error("Search failed:", error);

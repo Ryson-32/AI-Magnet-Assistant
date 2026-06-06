@@ -120,6 +120,7 @@ build
 # Tauri build output
 src-tauri/target
 src-tauri/gen/
+release/
 
 # Custom Ignores for Private Content
 

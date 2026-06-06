@@ -15,6 +15,10 @@
         "status": "Status",
         "enabled": "Enabled",
         "disabled": "Disabled",
+        "adultEnabled": "Adult categories: allowed",
+        "adultDisabled": "Adult categories: filtered",
+        "allowAdultToggle": "Allow adult categories",
+        "manageIndexers": "Manage Prowlarr indexers",
         "default": "Default",
         "deletable": "Deletable",
         "actions": {
@@ -36,6 +40,26 @@
         "form": {
           "engineName": "Engine Name",
           "urlTemplate": "URL Template",
+          "categories": "Category IDs (comma separated, optional)",
+          "allowAdult": "Allow adult categories (disabled by default)",
+          "testProwlarr": "Test Prowlarr connection",
+          "testingProwlarr": "Testing...",
+          "recommendedIndexers": "Prowlarr indexers",
+          "recommendedIndexersHelp": "Shows only indexers already configured in Prowlarr. Enable or disable them here; check connectivity in Prowlarr.",
+          "configured": "Configured",
+          "notConfigured": "Not added",
+          "unavailable": "Currently unavailable",
+          "configuredCount": "{count} configured",
+          "addableCount": "{count} addable",
+          "configuredIndexers": "Configured indexers",
+          "addableIndexers": "Addable indexers",
+          "addRecommended": "Add selected indexers",
+          "addingRecommended": "Adding...",
+          "prowlarrSteps": {
+            "install": "Install and start Prowlarr. Its default URL is http://127.0.0.1:9696.",
+            "indexers": "Add at least one working indexer in Prowlarr.",
+            "apiKey": "Copy the API key from Prowlarr Settings → General → Security."
+          },
           "urlExample1": "URL Example 1 (search for 'test', page 1)",
           "urlExample2": "URL Example 2 (search for 'test', page 2)",
           "placeholders": {
@@ -47,6 +71,7 @@
           "helpText": {
             "advanced": "Enter the URL template directly using placeholders: {keyword} for search terms and {page} for 1-based pagination.",
             "auto": "Enter two example URLs from the same search engine with different keywords and page numbers. The system will automatically analyze the URL pattern and create a template.",
+            "prowlarr": "Recommended. Enter a local or remote Prowlarr URL and API key to search through its official API.",
             "urlExample1": "Paste the complete URL when searching for \"test\" on the first page",
             "urlExample2": "Paste the complete URL when searching for \"test\" on the second page"
           },
@@ -74,7 +99,9 @@
         "addSuccess": "Search engine added successfully!",
         "addFailed": "Failed to add engine: {error}",
         "updateSuccess": "Search engine updated successfully!",
-        "updateFailed": "Failed to update engine: {error}"
+        "updateFailed": "Failed to update engine: {error}",
+        "recommendedAdded": "Added {count} recommended indexers",
+        "recommendedFailed": "Failed to add recommended indexers: {error}"
       }
     }
   }

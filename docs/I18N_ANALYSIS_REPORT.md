@@ -89,7 +89,7 @@ AI-Magnet-Assistant/
 1. **动态字符串拼接**
    - 位置: HomePage.vue
    - 问题: 大量使用模板字符串动态构建状态消息
-   - 示例: `searchStatus.value = \`Found \${results.value.length} results from clmclm.com...\``
+   - 示例: `searchStatus.value = \`Found \${results.value.length} results...\``
    - 解决方案: 需要消息格式化库支持
 
 2. **原生 alert() 使用**
@@ -207,7 +207,7 @@ const { t, locale } = useI18n()
 // 动态消息
 const message = t('home.searchStatus', {
   count: results.value.length,
-  engine: 'clmclm.com'
+  engine: 'configured engine'
 })
 ```
 
@@ -220,7 +220,7 @@ const message = t('home.searchStatus', {
 
 ### 5.2 搜索引擎名称
 
-- 保持搜索引擎名称（如"clmclm.com"）不翻译
+- 保持用户配置的搜索引擎名称不翻译
 - 仅翻译界面标签和描述
 
 ### 5.3 技术术语

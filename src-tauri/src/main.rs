@@ -62,45 +62,34 @@ fn get_priority_keywords(app_state: &app_state::AppState) -> Vec<String> {
 }
 
 /// 创建 SearchCore 实例
-fn create_search_core(
-    state: &app_state::AppState,
-    include_clmclm: bool,
-    include_others: bool,
-) -> Result<SearchCore, String> {
+fn create_search_core(state: &app_state::AppState) -> Result<SearchCore, String> {
     let (extraction_config, analysis_config) = build_llm_configs(state);
     let priority_keyword_strings = get_priority_keywords(state);
     let enabled_engines = get_active_engines(state);
 
-    let clmclm_is_enabled_in_settings = enabled_engines.iter().any(|e| e.name == "clmclm.com");
+    let custom_engines: Vec<searcher::SearchEngineConfig> = enabled_engines
+        .iter()
+        .map(|e| searcher::SearchEngineConfig {
+            name: e.name.clone(),
+            url: e.url_template.clone(),
+            engine_type: e.engine_type.clone(),
+            api_key: e.api_key.clone(),
+            categories: e.categories.clone(),
+            allow_adult: e.allow_adult,
+        })
+        .collect();
 
-    let custom_engine_tuples: Vec<(String, String)> = if include_others {
-        enabled_engines
-            .iter()
-            .filter(|e| e.name != "clmclm.com")
-            .map(|e| (e.name.clone(), e.url_template.clone()))
-            .collect()
-    } else {
-        Vec::new()
-    };
-
-    let final_clmclm_status = include_clmclm && clmclm_is_enabled_in_settings;
-
-    if custom_engine_tuples.is_empty() && !final_clmclm_status {
+    if custom_engines.is_empty() {
         return Err(i18n::translate_error(&i18n::ErrorCode::SearchNoEngines));
     }
 
-    println!(
-        "🔧 Creating search core: Custom Engines: {}, CLMCLM: {}",
-        custom_engine_tuples.len(),
-        final_clmclm_status
-    );
+    println!("🔧 Creating search core with {} engines", custom_engines.len());
 
     Ok(searcher::create_ai_enhanced_search_core(
         extraction_config,
         analysis_config,
         priority_keyword_strings,
-        custom_engine_tuples,
-        final_clmclm_status,
+        custom_engines,
     ))
 }
 
@@ -108,7 +97,7 @@ fn create_search_core(
 
 /// 统一的标题清理函数
 /// 用途：在第二阶段（分析后）回填标题时，做最少量的清理，保持人类可读性。
-/// 注意：搜索阶段的文件名生成应使用 `extract_clean_title`（searcher.rs）以保证可预期的文件名格式。
+/// 搜索阶段不会伪造文件列表；这里只清理模型返回的展示标题。
 fn clean_title_unified(title: &str) -> String {
     if title.trim().is_empty() {
         return "Unknown".to_string();
@@ -159,7 +148,7 @@ async fn analyze_resource(
     result: searcher::SearchResult,
     llm_config: llm_service::LlmConfig,
 ) -> Result<llm_service::DetailedAnalysisResult, String> {
-    let client = llm_service::GeminiClient::new();
+    let client = llm_service::OpenAiCompatibleClient::new();
 
     match client.batch_analyze_scores_and_tags(&result.title, &result.file_list, &llm_config).await {
         Ok((cleaned_title, score, tags)) => {
@@ -243,37 +232,198 @@ async fn search_multi_page(
     max_pages: Option<u32>,
 ) -> Result<Vec<searcher::SearchResult>, String> {
     let pages = max_pages.unwrap_or(3);
-    let search_core = create_search_core(&state, true, true)?;
+    let search_core = create_search_core(&state)?;
     search_core.search_multi_page(keyword.as_str(), pages).await.map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn search_clmclm_first(
-    state: tauri::State<'_, app_state::AppState>,
-    keyword: String,
-    max_pages: Option<u32>,
-) -> Result<Vec<searcher::SearchResult>, String> {
-    let pages = max_pages.unwrap_or(3);
-    match create_search_core(&state, true, false) {
-        Ok(search_core) => search_core.search_multi_page(keyword.as_str(), pages).await.map_err(|e| e.to_string()),
-        Err(_) => Ok(Vec::new()), // 如果clmclm未启用，则返回空结果
+async fn test_prowlarr_connection(url: String, api_key: String) -> Result<String, String> {
+    if url.trim().is_empty() || api_key.trim().is_empty() {
+        return Err("Prowlarr URL and API key are required".to_string());
     }
+
+    let client = reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(20))
+        .build()
+        .map_err(|e| e.to_string())?;
+    let base_url = url.trim().trim_end_matches('/');
+    let indexers = client
+        .get(format!("{base_url}/api/v1/indexer"))
+        .header("X-Api-Key", api_key.trim())
+        .send()
+        .await
+        .map_err(|e| format!("Unable to connect to Prowlarr: {e}"))?;
+
+    if !indexers.status().is_success() {
+        return Err(format!("Prowlarr returned HTTP {}", indexers.status()));
+    }
+
+    let indexer_count = indexers
+        .json::<Vec<serde_json::Value>>()
+        .await
+        .map_err(|e| format!("Connected, but failed to parse indexers: {e}"))?
+        .len();
+
+    Ok(format!("Connected to Prowlarr. Configured indexers: {indexer_count}"))
+}
+
+#[derive(serde::Serialize)]
+struct RecommendedProwlarrIndexer {
+    id: i64,
+    name: String,
+    configured: bool,
+    available: bool,
+    enabled: bool,
+    privacy: String,
+}
+
+fn prowlarr_client() -> Result<reqwest::Client, String> {
+    reqwest::Client::builder()
+        .timeout(std::time::Duration::from_secs(60))
+        .build()
+        .map_err(|e| e.to_string())
 }
 
 #[tauri::command]
-async fn search_other_engines(
-    state: tauri::State<'_, app_state::AppState>,
-    keyword: String,
-    max_pages: Option<u32>,
-) -> Result<Vec<searcher::SearchResult>, String> {
-    let pages = max_pages.unwrap_or(3);
-    match create_search_core(&state, false, true) {
-        Ok(search_core) => search_core.search_multi_page(keyword.as_str(), pages).await.map_err(|e| e.to_string()),
-        Err(_) => Ok(Vec::new()), // 如果没有其他引擎，则返回空结果
+async fn get_recommended_prowlarr_indexers(
+    url: String,
+    api_key: String,
+) -> Result<Vec<RecommendedProwlarrIndexer>, String> {
+    let client = prowlarr_client()?;
+    let base_url = url.trim().trim_end_matches('/');
+    let configured = client
+        .get(format!("{base_url}/api/v1/indexer"))
+        .header("X-Api-Key", api_key.trim())
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+    if !configured.status().is_success() {
+        return Err(format!("Prowlarr returned HTTP {}", configured.status()));
     }
+    let configured = configured
+        .json::<Vec<serde_json::Value>>()
+        .await
+        .map_err(|e| e.to_string())?;
+    let mut indexers = Vec::new();
+    for item in &configured {
+        let Some(name) = item["name"].as_str() else {
+            continue;
+        };
+        indexers.push(RecommendedProwlarrIndexer {
+            id: item["id"].as_i64().unwrap_or_default(),
+            name: name.to_string(),
+            configured: true,
+            available: true,
+            enabled: item["enable"].as_bool().unwrap_or(false),
+            privacy: item["privacy"].as_str().unwrap_or("unknown").to_string(),
+        });
+    }
+
+    indexers.sort_by_key(|indexer| indexer.name.to_lowercase());
+    Ok(indexers)
 }
 
+#[tauri::command]
+async fn update_prowlarr_indexer_status(
+    url: String,
+    api_key: String,
+    indexer_id: i64,
+    enabled: bool,
+) -> Result<(), String> {
+    let client = prowlarr_client()?;
+    let base_url = url.trim().trim_end_matches('/');
+    let mut indexer = client
+        .get(format!("{base_url}/api/v1/indexer/{indexer_id}"))
+        .header("X-Api-Key", api_key.trim())
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json::<serde_json::Value>()
+        .await
+        .map_err(|e| e.to_string())?;
 
+    indexer["enable"] = serde_json::json!(enabled);
+    let response = client
+        .put(format!("{base_url}/api/v1/indexer/{indexer_id}?forceSave=true"))
+        .header("X-Api-Key", api_key.trim())
+        .json(&indexer)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    if !response.status().is_success() {
+        let status = response.status();
+        let message = response.text().await.unwrap_or_default();
+        return Err(format!("Prowlarr returned HTTP {status}: {message}"));
+    }
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn add_recommended_prowlarr_indexers(
+    url: String,
+    api_key: String,
+    names: Vec<String>,
+) -> Result<Vec<String>, String> {
+    let client = prowlarr_client()?;
+    let base_url = url.trim().trim_end_matches('/');
+    let headers = || ("X-Api-Key", api_key.trim());
+    let profiles = client
+        .get(format!("{base_url}/api/v1/appprofile"))
+        .header(headers().0, headers().1)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json::<Vec<serde_json::Value>>()
+        .await
+        .map_err(|e| e.to_string())?;
+    let profile_id = profiles
+        .first()
+        .and_then(|profile| profile["id"].as_i64())
+        .ok_or_else(|| "Prowlarr has no application profile".to_string())?;
+    let schemas = client
+        .get(format!("{base_url}/api/v1/indexer/schema"))
+        .header(headers().0, headers().1)
+        .send()
+        .await
+        .map_err(|e| e.to_string())?
+        .json::<Vec<serde_json::Value>>()
+        .await
+        .map_err(|e| e.to_string())?;
+
+    let mut added = Vec::new();
+    let mut errors = Vec::new();
+    for name in names {
+        let Some(mut schema) = schemas
+            .iter()
+            .find(|item| item["name"].as_str() == Some(name.as_str()))
+            .cloned()
+        else {
+            errors.push(format!("{name}: unavailable"));
+            continue;
+        };
+        schema["appProfileId"] = serde_json::json!(profile_id);
+        let response = client
+            .post(format!("{base_url}/api/v1/indexer"))
+            .header(headers().0, headers().1)
+            .json(&schema)
+            .send()
+            .await
+            .map_err(|e| e.to_string())?;
+        if response.status().is_success() {
+            added.push(name);
+        } else {
+            let message = response.text().await.unwrap_or_default();
+            errors.push(format!("{name}: {message}"));
+        }
+    }
+
+    if added.is_empty() && !errors.is_empty() {
+        return Err(errors.join("\n"));
+    }
+    Ok(added)
+}
 
 // ============ 搜索引擎相关命令 ============
 
@@ -283,8 +433,20 @@ async fn add_search_engine(
     state: tauri::State<'_, app_state::AppState>,
     name: String,
     url_template: String,
+    engine_type: Option<String>,
+    api_key: Option<String>,
+    categories: Option<Vec<u32>>,
+    allow_adult: Option<bool>,
 ) -> Result<app_state::SearchEngine, String> {
-    let result = app_state::add_search_engine(&state, name, url_template)
+    let result = app_state::add_search_engine(
+        &state,
+        name,
+        url_template,
+        engine_type,
+        api_key,
+        categories,
+        allow_adult,
+    )
         .map_err(|e| e.to_string())?;
 
     // 保存状态到文件
@@ -300,8 +462,21 @@ async fn update_search_engine(
     id: String,
     name: String,
     url_template: String,
+    engine_type: Option<String>,
+    api_key: Option<String>,
+    categories: Option<Vec<u32>>,
+    allow_adult: Option<bool>,
 ) -> Result<(), String> {
-    app_state::update_search_engine(&state, id, name, url_template)
+    app_state::update_search_engine(
+        &state,
+        id,
+        name,
+        url_template,
+        engine_type,
+        api_key,
+        categories,
+        allow_adult,
+    )
         .map_err(|e| e.to_string())?;
 
     // 保存状态到文件
@@ -328,6 +503,17 @@ async fn update_engine_status(
     app_state::save_app_state(&app_handle, &state).map_err(|e| e.to_string())?;
 
     Ok(())
+}
+
+#[tauri::command]
+async fn update_engine_adult_status(
+    app_handle: tauri::AppHandle,
+    state: tauri::State<'_, app_state::AppState>,
+    id: String,
+    allow_adult: bool,
+) -> Result<(), String> {
+    app_state::update_engine_adult_status(&state, id, allow_adult).map_err(|e| e.to_string())?;
+    app_state::save_app_state(&app_handle, &state).map_err(|e| e.to_string())
 }
 
 #[tauri::command]
@@ -439,7 +625,6 @@ async fn batch_analyze_resources(
     // 转换为批量分析格式
     let batch_items: Vec<llm_service::BatchAnalysisItem> = results
         .iter()
-        .filter(|r| !r.file_list.is_empty())
         .map(|r| llm_service::BatchAnalysisItem {
             title: r.title.clone(),
             file_list: r.file_list.clone(),
@@ -460,7 +645,7 @@ async fn batch_analyze_resources(
         batch_size: config.analysis_config.batch_size,
     };
 
-    let client = llm_service::GeminiClient::new();
+    let client = llm_service::OpenAiCompatibleClient::new();
     let batch_size = config.analysis_config.batch_size as usize;
     let mut all_results = Vec::new();
     let mut failed_batches = 0;
@@ -923,8 +1108,10 @@ fn main() {
         })
         .invoke_handler(tauri::generate_handler![
             search_multi_page,
-            search_clmclm_first,
-            search_other_engines,
+            test_prowlarr_connection,
+            get_recommended_prowlarr_indexers,
+            update_prowlarr_indexer_status,
+            add_recommended_prowlarr_indexers,
             test_connection,
             test_extraction_connection,
             test_analysis_connection,
@@ -940,6 +1127,7 @@ fn main() {
             update_search_engine,
             get_all_engines,
             update_engine_status,
+            update_engine_adult_status,
             delete_engine,
             // 优先关键词命令
             add_priority_keyword,

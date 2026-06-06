@@ -6,6 +6,7 @@
       "ai": {
         "title": "AI Configuration",
         "subtitle": "Configure your AI providers for intelligent content analysis",
+        "providerHelp": "Agnes and DeepSeek use OpenAI-compatible Chat Completions. Custom providers require a complete API Base URL.",
         "extraction": {
           "title": "HTML Content Extraction (First API Call)",
           "description": "Used to extract magnet links and basic information from search result pages",
@@ -15,11 +16,11 @@
           "model": "Model",
           "test": "Test",
           "testing": "Testing...",
-          "helpText": "Your API key is stored securely and only used for AI analysis",
+          "helpText": "The API key is only used for AI requests; do not share the configuration file",
           "placeholders": {
             "apiKey": "Enter your API key...",
-            "apiBase": "e.g., https://generativelanguage.googleapis.com",
-            "model": "e.g., gemini-2.5-flash"
+            "apiBase": "e.g., https://apihub.agnes-ai.com/v1",
+            "model": "e.g., agnes-2.0-flash"
           }
         },
         "analysis": {
@@ -32,18 +33,18 @@
           "batchSize": "Batch Size",
           "test": "Test",
           "testing": "Testing...",
-          "helpText": "Your API key is stored securely and only used for AI analysis",
+          "helpText": "The API key is only used for AI requests; do not share the configuration file",
           "batchSizeHelp": "Number of search results to analyze in a single API call (1-20). Lower values are faster but may hit rate limits due to more frequent requests.",
           "placeholders": {
             "apiKey": "Enter your API key...",
-            "apiBase": "e.g., https://generativelanguage.googleapis.com",
-            "model": "e.g., gemini-2.5-flash-lite",
+            "apiBase": "e.g., https://api.deepseek.com",
+            "model": "e.g., deepseek-chat",
             "batchSize": "5"
           }
         },
         "rateLimit": {
           "title": "Rate Limits Table",
-          "tableTitle": "Gemini Model Rate Limits (AI Studio)",
+          "tableTitle": "Model Rate Limits",
           "headers": {
             "model": "Model",
             "requestsPerMin": "Requests/min",
@@ -52,7 +53,7 @@
           },
           "documentation": "📖 Official Rate Limits Documentation",
           "rateLimitTooLow": "Rate limits too low?",
-          "tryGeminiBalance": "Try gemini-balance"
+          "tryGeminiBalance": "See provider documentation"
         },
         "save": "Save AI Settings",
         "saving": "Saving..."

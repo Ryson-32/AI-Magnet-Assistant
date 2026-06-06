@@ -27,6 +27,18 @@ pub struct SearchEngine {
     pub url_template: String, // 包含 {keyword} 和 {page} 占位符
     pub is_enabled: bool,
     pub is_deletable: bool, // 默认引擎不可删除
+    #[serde(default = "default_engine_type")]
+    pub engine_type: String,
+    #[serde(default)]
+    pub api_key: String,
+    #[serde(default)]
+    pub categories: Vec<u32>,
+    #[serde(default)]
+    pub allow_adult: bool,
+}
+
+fn default_engine_type() -> String {
+    "legacy_html".to_string()
 }
 
 /// 优先关键词
@@ -54,10 +66,10 @@ fn default_batch_size() -> u32 {
 impl Default for SingleLlmConfig {
     fn default() -> Self {
         Self {
-            provider: "gemini".to_string(),
+            provider: "agnes".to_string(),
             api_key: "".to_string(),
-            api_base: "https://generativelanguage.googleapis.com".to_string(),
-            model: "gemini-2.5-flash".to_string(),
+            api_base: "https://apihub.agnes-ai.com/v1".to_string(),
+            model: "agnes-2.0-flash".to_string(),
             batch_size: default_batch_size(),
         }
     }
@@ -74,17 +86,17 @@ impl Default for LlmConfig {
     fn default() -> Self {
         Self {
             extraction_config: SingleLlmConfig {
-                provider: "gemini".to_string(),
+                provider: "agnes".to_string(),
                 api_key: "".to_string(),
-                api_base: "https://generativelanguage.googleapis.com".to_string(),
-                model: "gemini-2.5-flash".to_string(),
+                api_base: "https://apihub.agnes-ai.com/v1".to_string(),
+                model: "agnes-2.0-flash".to_string(),
                 batch_size: default_batch_size(),
             },
             analysis_config: SingleLlmConfig {
-                provider: "gemini".to_string(),
+                provider: "deepseek".to_string(),
                 api_key: "".to_string(),
-                api_base: "https://generativelanguage.googleapis.com".to_string(),
-                model: "gemini-2.5-flash-lite".to_string(),
+                api_base: "https://api.deepseek.com".to_string(),
+                model: "deepseek-chat".to_string(),
                 batch_size: default_batch_size(),
             },
         }
@@ -150,16 +162,7 @@ impl Default for AppData {
     fn default() -> Self {
         Self {
             favorites: Vec::new(),
-            search_engines: vec![
-                // 默认搜索引擎
-                SearchEngine {
-                    id: "default_clmclm".to_string(),
-                    name: "clmclm.com".to_string(),
-                    url_template: "http://clmclm.com/search-{keyword}-1-1-{page}.html".to_string(),
-                    is_enabled: true,
-                    is_deletable: false,
-                }
-            ],
+            search_engines: Vec::new(),
             priority_keywords: Vec::new(),
             llm_config: LlmConfig::default(),
             search_settings: SearchSettings::default(),
@@ -203,20 +206,13 @@ impl AppStateManager {
         let content = fs::read_to_string(&self.data_file_path)
             .map_err(|e| anyhow!("Failed to read app data file: {}", e))?;
         
-        let data: AppData = match serde_json::from_str(&content) {
-            Ok(data) => data,
-            Err(e) => {
-                eprintln!("Failed to parse app data, using default: {e}");
-                // 如果解析失败，备份损坏的文件并使用默认数据
-                let backup_path = self.data_file_path.with_extension("json.backup");
-                let _ = fs::copy(&self.data_file_path, backup_path);
+        let mut data: AppData = serde_json::from_str(&content).map_err(|e| {
+            let backup_path = self.data_file_path.with_extension("json.backup");
+            let _ = fs::copy(&self.data_file_path, backup_path);
+            anyhow!("Failed to parse app data; original configuration was preserved: {e}")
+        })?;
 
-                let default_data = AppData::default();
-                let _ = self.save_data(&default_data);
-                default_data
-            }
-        };
-
+        migrate_legacy_data(&mut data);
         Ok(data)
     }
 
@@ -229,6 +225,28 @@ impl AppStateManager {
             .map_err(|e| anyhow!("Failed to write app data file: {}", e))?;
         
         Ok(())
+    }
+}
+
+fn migrate_legacy_data(data: &mut AppData) {
+    migrate_legacy_llm_config(&mut data.llm_config.extraction_config, true);
+    migrate_legacy_llm_config(&mut data.llm_config.analysis_config, false);
+}
+
+fn migrate_legacy_llm_config(config: &mut SingleLlmConfig, extraction: bool) {
+    if config.provider != "gemini" {
+        return;
+    }
+
+    config.api_key.clear();
+    if extraction {
+        config.provider = "agnes".to_string();
+        config.api_base = "https://apihub.agnes-ai.com/v1".to_string();
+        config.model = "agnes-2.0-flash".to_string();
+    } else {
+        config.provider = "deepseek".to_string();
+        config.api_base = "https://api.deepseek.com".to_string();
+        config.model = "deepseek-chat".to_string();
     }
 }
 
@@ -317,6 +335,10 @@ pub fn add_search_engine(
     state: &AppState,
     name: String,
     url_template: String,
+    engine_type: Option<String>,
+    api_key: Option<String>,
+    categories: Option<Vec<u32>>,
+    allow_adult: Option<bool>,
 ) -> Result<SearchEngine> {
     let mut data = state.lock().unwrap();
 
@@ -326,6 +348,10 @@ pub fn add_search_engine(
         url_template,
         is_enabled: true,
         is_deletable: true,
+        engine_type: engine_type.unwrap_or_else(default_engine_type),
+        api_key: api_key.unwrap_or_default(),
+        categories: categories.unwrap_or_default(),
+        allow_adult: allow_adult.unwrap_or(false),
     };
 
     data.search_engines.push(engine.clone());
@@ -338,12 +364,28 @@ pub fn update_search_engine(
     id: String,
     name: String,
     url_template: String,
+    engine_type: Option<String>,
+    api_key: Option<String>,
+    categories: Option<Vec<u32>>,
+    allow_adult: Option<bool>,
 ) -> Result<()> {
     let mut data = state.lock().unwrap();
 
     if let Some(engine) = data.search_engines.iter_mut().find(|e| e.id == id) {
         engine.name = name;
         engine.url_template = url_template;
+        if let Some(engine_type) = engine_type {
+            engine.engine_type = engine_type;
+        }
+        if let Some(api_key) = api_key {
+            engine.api_key = api_key;
+        }
+        if let Some(categories) = categories {
+            engine.categories = categories;
+        }
+        if let Some(allow_adult) = allow_adult {
+            engine.allow_adult = allow_adult;
+        }
         Ok(())
     } else {
         Err(anyhow!(translate_error(&ErrorCode::EngineNotFound)))
@@ -362,6 +404,17 @@ pub fn update_engine_status(state: &AppState, id: String, is_enabled: bool) -> R
     
     if let Some(engine) = data.search_engines.iter_mut().find(|e| e.id == id) {
         engine.is_enabled = is_enabled;
+        Ok(())
+    } else {
+        Err(anyhow!(translate_error(&ErrorCode::EngineNotFound)))
+    }
+}
+
+pub fn update_engine_adult_status(state: &AppState, id: String, allow_adult: bool) -> Result<()> {
+    let mut data = state.lock().unwrap();
+
+    if let Some(engine) = data.search_engines.iter_mut().find(|e| e.id == id) {
+        engine.allow_adult = allow_adult;
         Ok(())
     } else {
         Err(anyhow!(translate_error(&ErrorCode::EngineNotFound)))

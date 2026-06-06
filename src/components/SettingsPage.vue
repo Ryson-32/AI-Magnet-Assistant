@@ -27,8 +27,9 @@
           <div class="form-group">
             <label for="extractionProvider">{{ $t('pages.settings.ai.extraction.provider') }}</label>
             <select id="extractionProvider" v-model="llmConfig.extraction_config.provider">
-              <option value="gemini">Google Gemini</option>
-              <option value="openai">OpenAI</option>
+              <option value="agnes">Agnes 2.0 Flash</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="openai_compatible">OpenAI-compatible</option>
             </select>
           </div>
 
@@ -81,8 +82,9 @@
           <div class="form-group">
             <label for="analysisProvider">{{ $t('pages.settings.ai.analysis.provider') }}</label>
             <select id="analysisProvider" v-model="llmConfig.analysis_config.provider">
-              <option value="gemini">Google Gemini</option>
-              <option value="openai">OpenAI</option>
+              <option value="agnes">Agnes 2.0 Flash</option>
+              <option value="deepseek">DeepSeek</option>
+              <option value="openai_compatible">OpenAI-compatible</option>
             </select>
           </div>
 
@@ -141,79 +143,7 @@
       </div>
 
       <div class="form-actions">
-        <div class="info-section">
-          <div class="rate-limit-info" @mouseenter="showRateLimit = true" @mouseleave="hideRateLimit">
-            <svg
-              class="table-icon"
-              viewBox="0 0 24 24"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <path d="M3 6h18v2H3V6zm0 5h18v2H3v-2zm0 5h18v2H3v-2z" fill="currentColor"/>
-            </svg>
-            <span class="rate-limit-text">{{ $t('pages.settings.ai.rateLimit.title') }}</span>
-
-            <!-- 悬停显示的速率限制表格 -->
-            <div v-if="showRateLimit" class="rate-limit-tooltip" @mouseenter="clearHideTimeout" @mouseleave="hideRateLimit">
-              <h4>{{ $t('pages.settings.ai.rateLimit.tableTitle') }}</h4>
-              <table class="rate-limit-table">
-                <thead>
-                  <tr>
-                    <th>{{ $t('pages.settings.ai.rateLimit.headers.model') }}</th>
-                    <th>{{ $t('pages.settings.ai.rateLimit.headers.requestsPerMin') }}</th>
-                    <th>{{ $t('pages.settings.ai.rateLimit.headers.tokensPerMin') }}</th>
-                    <th>{{ $t('pages.settings.ai.rateLimit.headers.requestsPerDay') }}</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  <tr>
-                    <td>gemini-2.5-pro</td>
-                    <td>5</td>
-                    <td>250,000</td>
-                    <td>100</td>
-                  </tr>
-                  <tr>
-                    <td>gemini-2.5-flash</td>
-                    <td>10</td>
-                    <td>250,000</td>
-                    <td>250</td>
-                  </tr>
-                  <tr class="highlight">
-                    <td>gemini-2.5-flash-lite-preview-06-17</td>
-                    <td>15</td>
-                    <td>250,000</td>
-                    <td>1,000</td>
-                  </tr>
-                  <tr>
-                    <td>gemini-2.0-flash</td>
-                    <td>15</td>
-                    <td>1,000,000</td>
-                    <td>200</td>
-                  </tr>
-                  <tr>
-                    <td>gemini-2.0-flash-lite</td>
-                    <td>30</td>
-                    <td>1,000,000</td>
-                    <td>200</td>
-                  </tr>
-                </tbody>
-              </table>
-              <div class="rate-limit-footer">
-                <a href="https://ai.google.dev/gemini/api/docs/rate-limits" target="_blank" rel="noopener noreferrer" class="rate-limit-link">
-                  {{ $t('pages.settings.ai.rateLimit.documentation') }}
-                </a>
-              </div>
-            </div>
-          </div>
-
-          <div class="gemini-balance-info">
-            <span class="balance-text">{{ $t('pages.settings.ai.rateLimit.rateLimitTooLow') }}</span>
-            <a href="https://github.com/snailyp/gemini-balance" target="_blank" rel="noopener noreferrer" class="balance-link">
-              <span>{{ $t('pages.settings.ai.rateLimit.tryGeminiBalance') }}</span>
-              <svg class="github-icon" viewBox="0 0 24 24" fill="currentColor" xmlns="http://www.w3.org/2000/svg"><path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222 v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/></svg>
-            </a>
-          </div>
-        </div>
+        <small class="help-text">{{ $t('pages.settings.ai.providerHelp') }}</small>
 
         <button type="button" @click="saveLlmConfig" :disabled="isSaving" class="save-btn">{{ isSaving ? $t('pages.settings.ai.saving') : $t('pages.settings.ai.save') }}</button>
       </div>
@@ -377,16 +307,16 @@ const isZhCN = computed(() => locale.value === 'zh-CN')
 
 const llmConfig = ref({
   extraction_config: {
-    provider: "gemini",
+    provider: "agnes",
     api_key: "",
-    api_base: "https://generativelanguage.googleapis.com",
-    model: "gemini-2.5-flash",
+    api_base: "https://apihub.agnes-ai.com/v1",
+    model: "agnes-2.0-flash",
   },
   analysis_config: {
-    provider: "gemini",
+    provider: "deepseek",
     api_key: "",
-    api_base: "https://generativelanguage.googleapis.com",
-    model: "gemini-2.5-flash-lite",
+    api_base: "https://api.deepseek.com",
+    model: "deepseek-chat",
     batch_size: 5,
   },
 });
@@ -394,8 +324,6 @@ const llmConfig = ref({
 const isSaving = ref(false);
 const isTestingExtraction = ref(false);
 const isTestingAnalysis = ref(false);
-const showRateLimit = ref(false);
-let hideTimeout: number | null = null;
 
 // 下载配置相关
 const downloadConfig = ref({
@@ -412,30 +340,25 @@ onMounted(async () => {
 });
 
 watch(() => llmConfig.value.extraction_config.provider, (newProvider) => {
-  if (newProvider === 'gemini') {
-    llmConfig.value.extraction_config.api_base = 'https://generativelanguage.googleapis.com';
-    llmConfig.value.extraction_config.model = 'gemini-2.5-flash';
-  } else if (newProvider === 'openai') {
-    llmConfig.value.extraction_config.api_base = 'https://api.openai.com/v1';
-    llmConfig.value.extraction_config.model = 'gpt-3.5-turbo'; 
+  if (newProvider === 'agnes') {
+    llmConfig.value.extraction_config.api_base = 'https://apihub.agnes-ai.com/v1';
+    llmConfig.value.extraction_config.model = 'agnes-2.0-flash';
+  } else if (newProvider === 'deepseek') {
+    llmConfig.value.extraction_config.api_base = 'https://api.deepseek.com';
+    llmConfig.value.extraction_config.model = 'deepseek-chat';
   }
 });
 
 watch(() => llmConfig.value.analysis_config.provider, (newProvider) => {
-  if (newProvider === 'gemini') {
-    llmConfig.value.analysis_config.api_base = 'https://generativelanguage.googleapis.com';
-    llmConfig.value.analysis_config.model = 'gemini-2.5-flash-lite';
-    // Keep existing batch_size or set default if not set
-    if (!llmConfig.value.analysis_config.batch_size) {
-      llmConfig.value.analysis_config.batch_size = 5;
-    }
-  } else if (newProvider === 'openai') {
-    llmConfig.value.analysis_config.api_base = 'https://api.openai.com/v1';
-    llmConfig.value.analysis_config.model = 'gpt-3.5-turbo';
-    // Keep existing batch_size or set default if not set
-    if (!llmConfig.value.analysis_config.batch_size) {
-      llmConfig.value.analysis_config.batch_size = 5;
-    }
+  if (newProvider === 'agnes') {
+    llmConfig.value.analysis_config.api_base = 'https://apihub.agnes-ai.com/v1';
+    llmConfig.value.analysis_config.model = 'agnes-2.0-flash';
+  } else if (newProvider === 'deepseek') {
+    llmConfig.value.analysis_config.api_base = 'https://api.deepseek.com';
+    llmConfig.value.analysis_config.model = 'deepseek-chat';
+  }
+  if (!llmConfig.value.analysis_config.batch_size) {
+    llmConfig.value.analysis_config.batch_size = 5;
   }
 }); 
 
@@ -457,7 +380,6 @@ async function loadLlmConfig() {
 async function saveLlmConfig() {
   isSaving.value = true;
   try {
-    console.log("Saving LLM config:", llmConfig.value);
     await invoke("update_llm_config", { config: llmConfig.value });
     console.log("LLM config saved successfully to app_data.json");
     showNotification(t('pages.settings.messages.settingsSaved'));
@@ -505,23 +427,6 @@ async function testAnalysisConnection() {
   } finally {
     isTestingAnalysis.value = false;
   }
-}
-
-function hideRateLimit() {
-  if (hideTimeout) {
-    clearTimeout(hideTimeout);
-  } 
-  hideTimeout = setTimeout(() => {
-    showRateLimit.value = false;
-  }, 100); // 100ms延迟，给用户时间移动鼠标到浮窗
-}
-
-function clearHideTimeout() {
-  if (hideTimeout) {
-    clearTimeout(hideTimeout);
-    hideTimeout = null;
-  }
-  showRateLimit.value = true;
 }
 
 // 下载配置相关函数

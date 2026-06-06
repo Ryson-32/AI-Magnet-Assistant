@@ -21,7 +21,7 @@
 - **Pain points**: Messy page structure and noisy titles; uneven result quality; heavy manual filtering.
 - **Tech stack**: Tauri + Rust (backend/system), Vue 3 + TypeScript (frontend).
 - **Core features**:
-  - Multi-engine aggregation: built-in engine first, others in parallel; real-time status shows the model in use.
+  - Multi-engine aggregation: recommended Prowlarr API integration plus legacy HTML engines.
   - Two-stage AI: Stage 1 HTML extraction (for custom engines) → Stage 2 content analysis (title cleaning, tags, purity 0–100).
   - Efficiency & management: Favorites and centralized download; priority keywords; sort by score/size; quick copy/open source link.
   - Download integration: quick download via custom application path.
@@ -42,7 +42,7 @@
 
 ### Two-Phase AI Pipeline (for custom engines and analysis)
 
-1. **HTML Content Extraction**: The backend calls Gemini to extract `{ title, magnet_link, file_size, source_url }` from raw HTML. This is used for custom engines. API base and model are configurable.
+1. **HTML Content Extraction**: The backend calls an OpenAI-compatible provider to extract `{ title, magnet_link, file_size, source_url }` from raw HTML.
 2. **Content Analysis**: The frontend triggers parallel batches to clean titles, compute a purity score, and generate tags (e.g., 4K, Chinese, Chinese Sub, BluRay). It falls back to individual analysis on failure and updates status live.
 
 ### Persistence
@@ -51,10 +51,10 @@
 
 ## Notes 📝
 
-Note: Current backend implementation supports Google Gemini. The OpenAI option is visible in the UI but not wired up in the backend yet.
+The backend supports Agnes, DeepSeek, and custom OpenAI-compatible endpoints.
 
-- **gemini-2.5-flash**: Recommended for HTML extraction (Stage 1).
-- **gemini-2.5-flash-lite**: Recommended for content analysis (Stage 2), faster and cost-effective.
+- **agnes-2.0-flash**: Default for HTML extraction.
+- **deepseek-chat**: Default for content analysis.
 
 Actual speed depends on network and page complexity; batch analysis is parallel with automatic fallbacks.
 
@@ -62,7 +62,7 @@ Actual speed depends on network and page complexity; batch analysis is parallel 
 
 1. **Initial Setup**
    - Go to Settings → AI Configuration; fill API base, model, and API key for both Extraction and Analysis; use the Test buttons.
-   - Optionally add custom engines (Engines page) using template or auto-from-examples.
+   - Add a Prowlarr engine with its URL and API key, or optionally add a legacy HTML engine.
    - Configure Download settings (application path, quick download, auto-close page) and Language.
 
 2. **Search**
@@ -112,10 +112,25 @@ npx tauri build
 
 ## Known Issues 🐞
 
-- OpenAI provider is not supported by the backend yet; Gemini is required.
-- Some sites use heavy JS or anti-bot; HTML may be JS or garbled. The app logs a preview and may fall back or return fewer results.
-- Hitting rate limits can cause analysis failures; see Settings for rate limits and tips (e.g., gemini-balance).
+- Some sites use heavy JS or anti-bot challenges; legacy HTML search may fail or return fewer results.
+- Prowlarr is the recommended search source. Adult categories are filtered by default.
+- Hitting provider rate limits can cause analysis failures.
 - The custom downloader quick-download feature is currently available on Windows only.
+
+### Prowlarr in Published Builds
+
+- Prowlarr is not bundled with the application. Users install a local instance or connect to an accessible remote instance.
+- Chinese setup notes with a working local Prowlarr, proxy, and FlareSolverr example are available in [docs/PROWLARR_LOCAL_SETUP.zh-CN.md](docs/PROWLARR_LOCAL_SETUP.zh-CN.md).
+- Add at least one indexer in Prowlarr, then copy its API key from Settings → General → Security.
+- Configure and test the connection from Search Engines → Prowlarr in this application.
+- Engine settings and API keys stay in the current user's app-data directory and are not included in Git or release packages.
+- Adult categories are filtered by default and can be enabled per Prowlarr engine.
+- This app only displays indexers already configured in Prowlarr and lets users enable or disable them. Add, test, and troubleshoot indexers in Prowlarr itself.
+- Prowlarr proxy download URLs are converted to standard `magnet:?xt=urn:btih:...` links when an info hash is available.
+- Chinese-language coverage depends on configured indexers. Public options include ACG.RIP, Bangumi Moe, and dmhy; broader Chinese media indexers may require accounts.
+- Private-site credentials remain in Prowlarr. Depending on the site, Prowlarr may request an API key, cookie, or passkey; this application does not read or store those credentials.
+
+Bundling both Prowlarr and Jackett is not recommended: they overlap heavily and would add substantial package size, background-process management, and GPL redistribution maintenance. Jackett/Torznab is better treated as an optional future compatibility interface.
 
 ## License 📄
 

@@ -15,6 +15,10 @@
         "status": "状态",
         "enabled": "已启用",
         "disabled": "已禁用",
+        "adultEnabled": "成人分类：允许",
+        "adultDisabled": "成人分类：已过滤",
+        "allowAdultToggle": "允许成人分类",
+        "manageIndexers": "管理 Prowlarr 索引源",
         "default": "默认",
         "deletable": "可删除",
         "actions": {
@@ -36,6 +40,26 @@
         "form": {
           "engineName": "引擎名称",
           "urlTemplate": "URL模板",
+          "categories": "分类编号（逗号分隔，可留空）",
+          "allowAdult": "允许成人分类（默认关闭）",
+          "testProwlarr": "测试 Prowlarr 连接",
+          "testingProwlarr": "正在测试...",
+          "recommendedIndexers": "Prowlarr 索引源",
+          "recommendedIndexersHelp": "这里只显示 Prowlarr 中已配置的索引源；可在这里启用或禁用，连接状态请在 Prowlarr 中查看。",
+          "configured": "已配置",
+          "notConfigured": "未添加",
+          "unavailable": "当前不可用",
+          "configuredCount": "已配置 {count} 个",
+          "addableCount": "可添加 {count} 个",
+          "configuredIndexers": "已配置索引源",
+          "addableIndexers": "可添加索引源",
+          "addRecommended": "添加所选索引源",
+          "addingRecommended": "正在添加...",
+          "prowlarrSteps": {
+            "install": "安装并启动 Prowlarr，默认地址为 http://127.0.0.1:9696。",
+            "indexers": "在 Prowlarr 中至少添加一个可用索引源。",
+            "apiKey": "在 Prowlarr 设置 → 常规 → 安全中复制 API Key。"
+          },
           "urlExample1": "URL示例 1（搜索'test'，第1页）",
           "urlExample2": "URL示例 2（搜索'test'，第2页）",
           "placeholders": {
@@ -47,6 +71,7 @@
           "helpText": {
             "advanced": "使用占位符直接输入URL模板：{keyword} 用于搜索词，{page} 用于基于1的分页。",
             "auto": "输入同一搜索引擎中不同关键词和页码的两个示例URL。系统会自动分析URL模式并创建模板。",
+            "prowlarr": "推荐方式。填写本地或远程 Prowlarr 地址与 API Key，应用将通过正式 API 聚合搜索。",
             "urlExample1": "粘贴在第一页搜索\"test\"时的完整URL",
             "urlExample2": "粘贴在第二页搜索\"test\"时的完整URL"
           },
@@ -74,7 +99,9 @@
         "addSuccess": "搜索引擎添加成功！",
         "addFailed": "添加引擎失败：{error}",
         "updateSuccess": "搜索引擎更新成功！",
-        "updateFailed": "更新引擎失败：{error}"
+        "updateFailed": "更新引擎失败：{error}",
+        "recommendedAdded": "已添加 {count} 个推荐索引源",
+        "recommendedFailed": "添加推荐索引源失败：{error}"
       }
     }
   }

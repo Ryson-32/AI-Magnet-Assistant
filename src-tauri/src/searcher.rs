@@ -1,9 +1,12 @@
 use anyhow::{Result, anyhow};
 // 移除未使用的顶层导入（reqwest 已通过具体路径使用）
 use scraper::{Html, Selector};
-use futures::future::join_all;
+use futures::{
+    future::join_all,
+    stream::{self, StreamExt},
+};
 use std::sync::Arc;
-use crate::llm_service::{LlmClient, GeminiClient, LlmConfig};
+use crate::llm_service::{LlmClient, LlmConfig, OpenAiCompatibleClient};
 
 // 统一的日志宏
 macro_rules! search_log {
@@ -86,156 +89,208 @@ pub trait SearchProvider: Send + Sync {
     async fn search(&self, query: &str, page: u32) -> Result<Vec<SearchResult>>;
 }
 
-/// clmclm.com 搜索引擎实现
-pub struct ClmclmProvider {
-    client: reqwest::Client,
-    pub base_url: String,
+#[derive(Debug, Clone)]
+pub struct SearchEngineConfig {
+    pub name: String,
+    pub url: String,
+    pub engine_type: String,
+    pub api_key: String,
+    pub categories: Vec<u32>,
+    pub allow_adult: bool,
 }
 
-impl ClmclmProvider {
-    pub fn with_base_url(base_url: &str) -> Self {
-        let client = reqwest::Client::builder()
-            .user_agent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.0.0 Safari/537.36")
-            .timeout(std::time::Duration::from_secs(30))
-            .build()
-            .expect("Failed to create HTTP client");
+pub struct ProwlarrProvider {
+    name: String,
+    base_url: String,
+    api_key: String,
+    categories: Vec<u32>,
+    allow_adult: bool,
+    client: reqwest::Client,
+}
 
+impl ProwlarrProvider {
+    pub fn new(config: SearchEngineConfig) -> Self {
+        let client = reqwest::Client::builder()
+            .timeout(std::time::Duration::from_secs(60))
+            .build()
+            .expect("Failed to create Prowlarr HTTP client");
         Self {
+            name: config.name,
+            base_url: config.url.trim_end_matches('/').to_string(),
+            api_key: config.api_key,
+            categories: config.categories,
+            allow_adult: config.allow_adult,
             client,
-            base_url: base_url.trim_end_matches('/').to_string(),
         }
     }
 
-    pub fn new() -> Self {
-        Self::with_base_url("http://clmclm.com")
+    async fn enabled_indexer_ids(&self) -> Result<Vec<u32>> {
+        let response = self
+            .client
+            .get(format!("{}/api/v1/indexer", self.base_url))
+            .header("X-Api-Key", self.api_key.trim())
+            .send()
+            .await?;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(anyhow!("Prowlarr indexer list failed (HTTP {status})"));
+        }
+
+        let indexers: Vec<ProwlarrIndexer> = response.json().await?;
+        Ok(indexers
+            .into_iter()
+            .filter(|indexer| indexer.enable)
+            .map(|indexer| indexer.id)
+            .collect())
     }
+
+    async fn search_indexer(
+        &self,
+        query: &str,
+        page: u32,
+        indexer_id: Option<u32>,
+    ) -> Result<Vec<SearchResult>> {
+        let mut request = self
+            .client
+            .get(format!("{}/api/v1/search", self.base_url))
+            .header("X-Api-Key", self.api_key.trim())
+            .query(&[
+                ("query", query.to_string()),
+                ("type", "search".to_string()),
+                ("limit", "100".to_string()),
+                ("offset", ((page.saturating_sub(1)) * 100).to_string()),
+            ]);
+        if let Some(indexer_id) = indexer_id {
+            request = request.query(&[("indexerIds", indexer_id.to_string())]);
+        }
+        for category in &self.categories {
+            request = request.query(&[("categories", category)]);
+        }
+
+        let response = tokio::time::timeout(std::time::Duration::from_secs(6), request.send())
+            .await
+            .map_err(|_| anyhow!("Prowlarr indexer search timed out"))??;
+        let status = response.status();
+        if !status.is_success() {
+            return Err(anyhow!("Prowlarr search failed (HTTP {status})"));
+        }
+
+        let releases: Vec<ProwlarrRelease> = response.json().await?;
+        Ok(self.releases_to_results(releases))
+    }
+
+    fn releases_to_results(&self, releases: Vec<ProwlarrRelease>) -> Vec<SearchResult> {
+        releases
+            .into_iter()
+            .filter(|release| {
+                self.allow_adult
+                    || !release
+                        .categories
+                        .iter()
+                        .any(|category| (6000..7000).contains(&category.id))
+            })
+            .filter_map(|release| {
+                let magnet_link = release
+                    .magnet_url
+                    .filter(|url| url.starts_with("magnet:?"))
+                    .or_else(|| {
+                        release
+                            .info_hash
+                            .filter(|hash| !hash.trim().is_empty())
+                            .map(|hash| format!("magnet:?xt=urn:btih:{hash}"))
+                    })?;
+                Some(SearchResult {
+                    title: release.title.unwrap_or_else(|| "Unknown".to_string()),
+                    magnet_link,
+                    file_size: release.size.map(format_bytes),
+                    upload_date: release.publish_date,
+                    file_list: Vec::new(),
+                    source_url: release.info_url.or(release.comment_url),
+                    score: None,
+                    tags: None,
+                })
+            })
+            .collect()
+    }
+}
+
+#[derive(serde::Deserialize)]
+struct ProwlarrIndexer {
+    id: u32,
+    #[serde(default)]
+    enable: bool,
+}
+
+#[derive(serde::Deserialize)]
+#[serde(rename_all = "camelCase")]
+struct ProwlarrRelease {
+    title: Option<String>,
+    size: Option<u64>,
+    publish_date: Option<String>,
+    info_url: Option<String>,
+    comment_url: Option<String>,
+    magnet_url: Option<String>,
+    info_hash: Option<String>,
+    #[serde(default)]
+    categories: Vec<ProwlarrCategory>,
+}
+
+#[derive(serde::Deserialize)]
+struct ProwlarrCategory {
+    id: u32,
 }
 
 #[async_trait::async_trait]
-impl SearchProvider for ClmclmProvider {
+impl SearchProvider for ProwlarrProvider {
     fn name(&self) -> &str {
-        "clmclm.com"
+        &self.name
     }
 
     async fn search(&self, query: &str, page: u32) -> Result<Vec<SearchResult>> {
-        let encoded_query = urlencoding::encode(query);
-        let url = format!("{}/search-{}-1-1-{}.html", self.base_url, encoded_query, page);
-        search_log!(info, "Searching: {}", url);
-
-        let response = self.client
-            .get(&url)
-            .send()
-            .await
-            .map_err(|e| handle_request_error(&url, e))?;
-
-        if !response.status().is_success() {
-            search_log!(error, "HTTP error {} for {}", response.status(), url);
-            return Err(anyhow!("HTTP error {}: {}", response.status(), url));
+        if self.api_key.trim().is_empty() {
+            return Err(anyhow!("Prowlarr API key is required"));
         }
 
-        let html = response.text().await?;
-        let results = self.parse_results(&html)?;
-        search_log!(stats, "Found {} results on page {}", results.len(), page);
-        Ok(results)
-    }
-}
+        let indexer_ids = self.enabled_indexer_ids().await.unwrap_or_default();
+        if indexer_ids.is_empty() {
+            return self.search_indexer(query, page, None).await;
+        }
 
-impl ClmclmProvider {
-    fn parse_results(&self, html: &str) -> Result<Vec<SearchResult>> {
-        let document = Html::parse_document(html);
+        let results = stream::iter(indexer_ids)
+            .map(|indexer_id| async move { self.search_indexer(query, page, Some(indexer_id)).await })
+            .buffer_unordered(16)
+            .collect::<Vec<_>>()
+            .await;
 
-        let row_selector = Selector::parse("div.ssbox")
-            .map_err(|e| anyhow!("Invalid CSS selector: {}", e))?;
-        let title_selector = Selector::parse("div.title > h3 > a")
-            .map_err(|e| anyhow!("Invalid CSS selector: {}", e))?;
-        let magnet_selector = Selector::parse("div.sbar a[href^=\"magnet:\"]")
-            .map_err(|e| anyhow!("Invalid CSS selector: {}", e))?;
-        let file_list_selector = Selector::parse("ul > li")
-            .map_err(|e| anyhow!("Invalid CSS selector: {}", e))?;
-
-        let mut results = Vec::new();
-
-        for element in document.select(&row_selector) {
-            let title_element = element.select(&title_selector).next();
-            let magnet_element = element.select(&magnet_selector).next();
-
-            if let (Some(title_node), Some(magnet_node)) = (title_element, magnet_element) {
-                let title = clean_html_text(&title_node.text().collect::<String>());
-                let source_url = title_node.value().attr("href").map(|s| format!("{}{}", self.base_url, s));
-
-                if let Some(magnet_link) = magnet_node.value().attr("href") {
-                    // 尝试从所有span中找到文件大小
-                    let mut file_size = None;
-                    let span_selector = Selector::parse("div.sbar span").unwrap();
-                    for span in element.select(&span_selector) {
-                        let span_text = span.text().collect::<String>();
-                        let span_text = span_text.trim();
-                        if span_text.starts_with("大小:") {
-                            file_size = Some(span_text.replace("大小:", "").trim().to_string());
-                            break;
-                        }
-                    }
-
-                    // 提取真实的文件列表
-                    let mut file_list = Vec::new();
-                    for li_element in element.select(&file_list_selector) {
-                        let file_text = li_element.text().collect::<String>();
-                        let file_text = file_text.trim();
-
-                        // 解析文件名和大小，格式通常是 "文件名 大小"
-                        if !file_text.is_empty() {
-                            // 分割文件名和大小，大小通常在最后
-                            let parts: Vec<&str> = file_text.split_whitespace().collect();
-                            if parts.len() >= 2 {
-                                // 检查最后一部分是否是文件大小（包含 GB, MB, KB 等）
-                                let last_part = parts[parts.len() - 1];
-                                if last_part.contains("GB") || last_part.contains("MB") || last_part.contains("KB") || last_part.contains("TB") {
-                                    // 文件名是除了最后一部分的所有内容
-                                    let filename = parts[..parts.len() - 1].join(" ");
-                                    if !filename.is_empty() {
-                                        file_list.push(filename);
-                                    }
-                                } else {
-                                    // 如果没有识别到大小，就把整个文本作为文件名
-                                    file_list.push(file_text.to_string());
-                                }
-                            } else {
-                                // 如果只有一个部分，直接作为文件名
-                                file_list.push(file_text.to_string());
-                            }
-                        }
-                    }
-
-                    // 如果没有解析到文件列表，使用基于标题的生成方法作为后备
-                    if file_list.is_empty() {
-                        file_list = self.extract_file_list_from_magnet(magnet_link, &title);
-                    }
-
-                    results.push(SearchResult {
-                        title,
-                        magnet_link: magnet_link.to_string(),
-                        file_size,
-                        upload_date: None, // clmclm.com doesn't provide upload date
-                        file_list,
-                        source_url,
-                        score: None,
-                        tags: None,
-                    });
+        let mut all_results = Vec::new();
+        let mut successful_indexers = 0usize;
+        let mut errors = Vec::new();
+        for result in results {
+            match result {
+                Ok(mut indexer_results) => {
+                    successful_indexers += 1;
+                    all_results.append(&mut indexer_results);
                 }
+                Err(error) => errors.push(error.to_string()),
             }
         }
 
-        Ok(results)
-    }
-
-    /// 从磁力链接和标题中提取文件列表（基于标题生成相关文件列表）
-    fn extract_file_list_from_magnet(&self, magnet_link: &str, title: &str) -> Vec<String> {
-        if !magnet_link.contains("btih:") {
-            return vec![];
+        if successful_indexers == 0 && !errors.is_empty() {
+            return Err(anyhow!("All Prowlarr indexers failed: {}", errors.join("; ")));
         }
-
-        generate_file_list_from_title(title)
+        Ok(all_results)
     }
+}
+
+fn format_bytes(bytes: u64) -> String {
+    const UNITS: [&str; 5] = ["B", "KB", "MB", "GB", "TB"];
+    let mut value = bytes as f64;
+    let mut unit = 0;
+    while value >= 1024.0 && unit < UNITS.len() - 1 {
+        value /= 1024.0;
+        unit += 1;
+    }
+    format!("{value:.2} {}", UNITS[unit])
 }
 
 /// 通用搜索引擎提供商，支持自定义URL模板和AI智能识别
@@ -293,8 +348,9 @@ impl SearchProvider for GenericProvider {
 
     async fn search(&self, query: &str, page: u32) -> Result<Vec<SearchResult>> {
         // 替换URL模板中的占位符
+        let encoded_query = urlencoding::encode(query);
         let mut url = self.url_template
-            .replace("{keyword}", query);
+            .replace("{keyword}", encoded_query.as_ref());
 
         // Handle different page numbering systems
         if url.contains("{page-1}") {
@@ -463,9 +519,6 @@ impl GenericProvider {
                 continue;
             }
 
-            // 第一阶段AI只提取基础信息，文件列表需要根据标题生成
-            let file_list = generate_file_list_from_title(&basic_info.title);
-
             // 处理 source_url：统一使用 normalize_source_url
             let source_url = basic_info
                 .source_url
@@ -476,7 +529,7 @@ impl GenericProvider {
                 magnet_link: basic_info.magnet_link,
                 file_size: basic_info.file_size,
                 upload_date: None, // 第一阶段不提取上传日期
-                file_list,
+                file_list: Vec::new(),
                 source_url,
                 score: None,
                 tags: None,
@@ -624,14 +677,12 @@ impl GenericProvider {
         // 如果没有找到标题，尝试从磁力链接提取
         let final_title = title.unwrap_or_else(|| self.extract_title_from_magnet(&magnet_link));
 
-        let file_list = generate_file_list_from_title(&final_title);
-
         Some(SearchResult {
             title: final_title,
             magnet_link,
             file_size,
             upload_date,
-            file_list,
+            file_list: Vec::new(),
             source_url,
             score: None,
             tags: None,
@@ -648,14 +699,12 @@ impl GenericProvider {
 
             if seen_magnets.insert(magnet_link.to_string()) {
                 let title = self.extract_title_from_magnet(magnet_link);
-                let file_list = generate_file_list_from_title(&title);
-
                 results.push(SearchResult {
                     title,
                     magnet_link: magnet_link.to_string(),
                     file_size: None,
                     upload_date: None,
-                    file_list,
+                    file_list: Vec::new(),
                     source_url: None,
                     score: None,
                     tags: None,
@@ -723,102 +772,6 @@ impl GenericProvider {
     }
 }
 
-/// 根据标题生成相关的文件列表
-fn generate_file_list_from_title(title: &str) -> Vec<String> {
-    let mut file_list = Vec::new();
-    let title_lower = title.to_lowercase();
-
-    // 根据标题内容生成相关的文件列表
-    if title_lower.contains("电影") || title_lower.contains("movie") || title_lower.contains("film") {
-        // 电影类型
-        let base_name = extract_clean_title(title);
-        file_list.push(format!("{base_name}.1080p.BluRay.x264.mkv"));
-        file_list.push(format!("{base_name}.720p.BluRay.x264.mkv"));
-        file_list.push("Subtitles/Chinese.srt".to_string());
-        file_list.push("Subtitles/English.srt".to_string());
-        file_list.push("Sample.mkv".to_string());
-    } else if title_lower.contains("s0") || title_lower.contains("season") || title_lower.contains("集") {
-        // 电视剧类型
-        let base_name = extract_clean_title(title);
-        for i in 1..=10 {
-            file_list.push(format!("{base_name}.S01E{i:02}.1080p.WEB-DL.x264.mkv"));
-        }
-        file_list.push("Subtitles/Chinese.srt".to_string());
-        file_list.push("Subtitles/English.srt".to_string());
-    } else if title_lower.contains("游戏") || title_lower.contains("game") {
-        // 游戏类型
-        let base_name = extract_clean_title(title);
-        file_list.push(format!("{base_name}.exe"));
-        file_list.push("Setup.exe".to_string());
-        file_list.push("Crack/Keygen.exe".to_string());
-        file_list.push("README.txt".to_string());
-    } else if title_lower.contains("音乐") || title_lower.contains("music") || title_lower.contains("mp3") || title_lower.contains("flac") {
-        // 音乐类型
-        let base_name = extract_clean_title(title);
-        for i in 1..=12 {
-            file_list.push(format!("{base_name} - Track {i:02}.mp3"));
-        }
-        file_list.push("Cover.jpg".to_string());
-    } else if title_lower.contains("软件") || title_lower.contains("software") || title_lower.contains("app") {
-        // 软件类型
-        let base_name = extract_clean_title(title);
-        file_list.push(format!("{base_name}_Setup.exe"));
-        file_list.push("Crack/Patch.exe".to_string());
-        file_list.push("License.txt".to_string());
-        file_list.push("README.txt".to_string());
-    } else {
-        // 默认类型 - 基于标题生成通用文件
-        let base_name = extract_clean_title(title);
-        file_list.push(format!("{base_name}.mkv"));
-        file_list.push(format!("{base_name}.mp4"));
-        file_list.push("README.txt".to_string());
-    }
-
-    // 添加一些通用文件
-    if !file_list.iter().any(|f| f.contains("README")) {
-        file_list.push("README.txt".to_string());
-    }
-
-    file_list
-}
-
-/// 从标题中提取干净的名称（移除特殊字符和格式信息）
-/// 用途：用于搜索解析阶段生成稳定的文件名，尽量保证可预测与无特殊字符。
-/// 注意：展示给用户的标题清理应使用 `clean_title_unified`（main.rs）。
-fn extract_clean_title(title: &str) -> String {
-    let mut clean_title = title.to_string();
-
-    // 移除常见的格式标识
-    let patterns_to_remove = [
-        r"\[.*?\]", r"\(.*?\)", r"【.*?】", r"（.*?）",
-        r"1080p", r"720p", r"4K", r"BluRay", r"WEB-DL", r"HDTV",
-        r"x264", r"x265", r"H\.264", r"H\.265", r"HEVC",
-        r"DTS", r"AC3", r"AAC", r"MP3", r"FLAC",
-        r"mkv", r"mp4", r"avi", r"rmvb", r"wmv"
-    ];
-
-    for pattern in &patterns_to_remove {
-        if let Ok(re) = regex::Regex::new(&format!("(?i){pattern}")) {
-            clean_title = re.replace_all(&clean_title, "").to_string();
-        }
-    }
-
-    // 清理多余的空格和特殊字符
-    clean_title = clean_title
-        .trim()
-        .replace("  ", " ")
-        .replace(" ", "_")
-        .chars()
-        .filter(|c| c.is_alphanumeric() || *c == '_' || *c == '-')
-        .collect();
-
-    if clean_title.is_empty() {
-        "Unknown".to_string()
-    } else {
-        clean_title
-    }
-}
-
 /// 搜索引擎核心
 pub struct SearchCore {
     providers: Vec<Arc<dyn SearchProvider>>,
@@ -827,7 +780,7 @@ pub struct SearchCore {
 impl SearchCore {
     // 注意：基础构造函数已被删除，统一使用 create_ai_enhanced_search_core
 
-    /// 多页搜索 - 按提供商顺序搜索，优先返回clmclm结果
+    /// 并发搜索所有提供商和请求页
     pub async fn search_multi_page(&self, query: &str, max_pages: u32) -> Result<Vec<SearchResult>> {
         if self.providers.is_empty() {
             return Err(anyhow!("No search providers available"));
@@ -835,86 +788,42 @@ impl SearchCore {
 
         println!("🔍 Starting search with {} providers, {} pages each", self.providers.len(), max_pages);
 
-        let mut all_results = Vec::new();
-
-        // 分离clmclm和其他提供商
-        let mut clmclm_provider = None;
-        let mut other_providers = Vec::new();
-
+        let mut search_futures = Vec::new();
         for provider in &self.providers {
-            if provider.name() == "clmclm.com" {
-                clmclm_provider = Some(Arc::clone(provider));
-            } else {
-                other_providers.push(Arc::clone(provider));
-            }
-        }
-
-        // 1. 首先搜索clmclm（如果启用）
-        if let Some(clmclm) = clmclm_provider {
-            println!("🔍 Searching clmclm.com first for faster results");
             for page in 1..=max_pages {
-                match clmclm.search(query, page).await {
-                    Ok(mut results) => {
-                        let count = results.len();
-                        println!("✅ clmclm.com page {page} returned {count} results");
-                        all_results.append(&mut results);
-                    }
-                    Err(e) => {
-                        println!("❌ clmclm.com page {page} failed: {e}");
-                    }
+                let provider = Arc::clone(provider);
+                let query = query.to_string();
+                let provider_name = provider.name().to_string();
+                search_futures.push(async move {
+                    println!("🔍 Searching {query} page {page} with provider: {provider_name}");
+                    provider.search(&query, page).await
+                });
+            }
+        }
+
+        let mut all_results = Vec::new();
+        let mut successful_requests = 0usize;
+        let mut errors = Vec::new();
+        for result in join_all(search_futures).await {
+            match result {
+                Ok(mut page_results) => {
+                    successful_requests += 1;
+                    all_results.append(&mut page_results);
+                }
+                Err(e) => {
+                    println!("⚠️ Search task failed: {e}");
+                    errors.push(e.to_string());
                 }
             }
         }
 
-        // 2. 然后并发搜索其他提供商
-        if !other_providers.is_empty() {
-            println!("🔍 Now searching {} other providers concurrently", other_providers.len());
-
-            let mut other_search_futures = Vec::new();
-
-            for provider in other_providers {
-                for page in 1..=max_pages {
-                    let provider = Arc::clone(&provider);
-                    let query = query.to_string();
-                    let provider_name = provider.name().to_string();
-
-                    let search_future = async move {
-                        println!("🔍 Searching {query} page {page} with provider: {provider_name}");
-                        match provider.search(&query, page).await {
-                            Ok(results) => {
-                                let count = results.len();
-                                println!("✅ Provider {provider_name} page {page} returned {count} results");
-                                Ok(results)
-                            }
-                            Err(e) => {
-                                println!("❌ Provider {provider_name} page {page} failed: {e}");
-                                Err(e)
-                            }
-                        }
-                    };
-
-                    other_search_futures.push(search_future);
-                }
-            }
-
-            // 并发执行其他搜索任务
-            let results = join_all(other_search_futures).await;
-
-            for result in results {
-                match result {
-                    Ok(mut page_results) => {
-                        all_results.append(&mut page_results);
-                    }
-                    Err(e) => {
-                        println!("⚠️ Search task failed: {e}");
-                        // 继续处理其他结果，不因为单个任务失败而中断
-                    }
-                }
-            }
+        if successful_requests == 0 && !errors.is_empty() {
+            return Err(anyhow!("All search engines failed: {}", errors.join("; ")));
         }
 
-        println!("🎯 Total results collected from all providers: {}", all_results.len());
-        Ok(all_results)
+        let results = deduplicate_by_btih(all_results);
+        println!("🎯 Total unique results collected from all providers: {}", results.len());
+        Ok(results)
     }
 
 
@@ -931,37 +840,39 @@ pub fn create_ai_enhanced_search_core(
     extraction_config: Option<LlmConfig>,
     analysis_config: Option<LlmConfig>, // 保持向后兼容，但现在只用于HTML提取
     priority_keywords: Vec<String>,
-    custom_engines: Vec<(String, String)>, // (name, url_template) pairs
-    include_clmclm: bool // 是否包含 clmclm.com
+    custom_engines: Vec<SearchEngineConfig>,
 ) -> SearchCore {
     let mut providers: Vec<Arc<dyn SearchProvider>> = Vec::new();
-
-    // 只有在明确启用时才添加 clmclm.com 提供商
-    if include_clmclm {
-        println!("✅ Adding clmclm.com provider");
-        providers.push(Arc::new(ClmclmProvider::new()));
-    }
 
     // 为自定义搜索引擎创建AI增强的提供商
     // 优先使用 extraction_config，如果没有则使用 analysis_config（向后兼容）
     let html_extraction_config = extraction_config.or(analysis_config);
 
     if let Some(extract_config) = html_extraction_config {
-        let llm_client: Arc<dyn LlmClient> = Arc::new(GeminiClient::new());
+        let llm_client: Arc<dyn LlmClient> = Arc::new(OpenAiCompatibleClient::new());
 
-        for (name, url_template) in custom_engines {
-            println!("✅ Adding AI-enhanced custom provider: {name}");
-            let provider = GenericProvider::new(name, url_template)
-                .with_llm_client_and_config(llm_client.clone(), extract_config.clone())
-                .with_priority_keywords(priority_keywords.clone());
-            providers.push(Arc::new(provider));
+        for engine in custom_engines {
+            if engine.engine_type == "prowlarr" {
+                println!("✅ Adding Prowlarr provider: {}", engine.name);
+                providers.push(Arc::new(ProwlarrProvider::new(engine)));
+            } else {
+                println!("✅ Adding AI-enhanced custom provider: {}", engine.name);
+                let provider = GenericProvider::new(engine.name, engine.url)
+                    .with_llm_client_and_config(llm_client.clone(), extract_config.clone())
+                    .with_priority_keywords(priority_keywords.clone());
+                providers.push(Arc::new(provider));
+            }
         }
     } else {
         // 如果没有LLM配置，创建基础的自定义提供商
-        for (name, url_template) in custom_engines {
-            println!("✅ Adding basic custom provider: {name}");
-            let provider = GenericProvider::new(name, url_template);
-            providers.push(Arc::new(provider));
+        for engine in custom_engines {
+            if engine.engine_type == "prowlarr" {
+                println!("✅ Adding Prowlarr provider: {}", engine.name);
+                providers.push(Arc::new(ProwlarrProvider::new(engine)));
+            } else {
+                println!("✅ Adding basic custom provider: {}", engine.name);
+                providers.push(Arc::new(GenericProvider::new(engine.name, engine.url)));
+            }
         }
     }
 
@@ -976,88 +887,104 @@ mod tests {
     use httpmock::prelude::*;
     // removed redundant single-component import per clippy
 
-    #[tokio::test]
-    async fn test_search_successful() {
-        // Start a mock server
-        let server = MockServer::start();
+    struct FailingProvider;
 
-        // Create a mock
+    #[async_trait::async_trait]
+    impl SearchProvider for FailingProvider {
+        fn name(&self) -> &str {
+            "failing"
+        }
+
+        async fn search(&self, _query: &str, _page: u32) -> Result<Vec<SearchResult>> {
+            Err(anyhow!("unauthorized"))
+        }
+    }
+
+    #[tokio::test]
+    async fn reports_error_when_all_search_engines_fail() {
+        let core = SearchCore {
+            providers: vec![Arc::new(FailingProvider)],
+        };
+        let error = core.search_multi_page("test", 1).await.unwrap_err();
+        assert!(error.to_string().contains("unauthorized"));
+    }
+
+    #[tokio::test]
+    async fn prowlarr_search_uses_api_key_and_filters_adult_categories() {
+        let server = MockServer::start();
         let mock = server.mock(|when, then| {
             when.method(GET)
-                .path("/search-test-1-1-1.html");
-            then.status(200)
-                .header("content-type", "text/html; charset=UTF-8")
-                .body(r#"
-                    <!DOCTYPE html>
-                    <html>
-                    <body>
-                        <div class="ssbox">
-                            <div class="title"><h3><a href="/detail/123">Test Title 1</a></h3></div>
-                            <div class="sbar">
-                                <a href="magnet:?xt=urn:btih:12345">Magnet Link</a>
-                                <span>大小: 1.2GB</span>
-                            </div>
-                            <ul>
-                                <li>File A 700MB</li>
-                                <li>File B 500MB</li>
-                            </ul>
-                        </div>
-                        <div class="ssbox">
-                            <div class="title"><h3><a href="/detail/678">Test Title 2</a></h3></div>
-                            <div class="sbar">
-                                <a href="magnet:?xt=urn:btih:67890">Magnet Link</a>
-                                <span>大小: 900MB</span>
-                            </div>
-                            <ul>
-                                <li>Episode 01 450MB</li>
-                                <li>Episode 02 450MB</li>
-                            </ul>
-                        </div>
-                    </body>
-                    </html>
-                "#);
+                .path("/api/v1/search")
+                .header("x-api-key", "secret")
+                .query_param("query", "test")
+                .query_param("type", "search");
+            then.status(200).json_body_obj(&serde_json::json!([
+                {
+                    "title": "Allowed",
+                    "magnetUrl": "http://127.0.0.1:9696/1/download?apikey=secret",
+                    "infoHash": "allowed",
+                    "size": 1073741824,
+                    "categories": [{"id": 2000}]
+                },
+                {
+                    "title": "Filtered",
+                    "infoHash": "adult",
+                    "categories": [{"id": 6000}]
+                }
+            ]));
         });
 
-        // Perform the search against the mock server
-        let provider = ClmclmProvider::with_base_url(&server.base_url());
+        let provider = ProwlarrProvider::new(SearchEngineConfig {
+            name: "Prowlarr".to_string(),
+            url: server.base_url(),
+            engine_type: "prowlarr".to_string(),
+            api_key: "secret".to_string(),
+            categories: Vec::new(),
+            allow_adult: false,
+        });
         let results = provider.search("test", 1).await.unwrap();
 
-        // Assert
         mock.assert();
-        assert_eq!(results.len(), 2);
-        assert_eq!(results[0].title, "Test Title 1");
-        assert_eq!(results[0].magnet_link, "magnet:?xt=urn:btih:12345");
-        assert_eq!(results[1].title, "Test Title 2");
-        assert_eq!(results[1].magnet_link, "magnet:?xt=urn:btih:67890");
+        assert_eq!(results.len(), 1);
+        assert_eq!(results[0].title, "Allowed");
+        assert_eq!(results[0].magnet_link, "magnet:?xt=urn:btih:allowed");
+        assert_eq!(results[0].file_size.as_deref(), Some("1.00 GB"));
     }
 
-    #[tokio::test]
-    async fn test_search_no_results() {
-        // Start a mock server
-        let server = MockServer::start();
-
-        // Create a mock for a page with no items
-        let mock = server.mock(|when, then| {
-            when.method(GET)
-                .path("/search-empty-1-1-1.html");
-            then.status(200)
-                .header("content-type", "text/html; charset=UTF-8")
-                .body(r#"
-                    <!DOCTYPE html>
-                    <html>
-                    <body>
-                        <p>No results found.</p>
-                    </body>
-                    </html>
-                "#);
-        });
-
-        // Perform the search
-        let provider = ClmclmProvider::with_base_url(&server.base_url());
-        let results = provider.search("empty", 1).await.unwrap();
-
-        // Assert
-        mock.assert();
-        assert!(results.is_empty());
+    #[test]
+    fn deduplicates_results_by_btih_case_insensitively() {
+        let make_result = |magnet_link: &str| SearchResult {
+            title: "Title".to_string(),
+            magnet_link: magnet_link.to_string(),
+            file_size: None,
+            upload_date: None,
+            file_list: Vec::new(),
+            source_url: None,
+            score: None,
+            tags: None,
+        };
+        let results = deduplicate_by_btih(vec![
+            make_result("magnet:?xt=urn:btih:ABC123&dn=one"),
+            make_result("magnet:?xt=urn:btih:abc123&dn=two"),
+        ]);
+        assert_eq!(results.len(), 1);
     }
+}
+
+fn deduplicate_by_btih(results: Vec<SearchResult>) -> Vec<SearchResult> {
+    let mut seen = std::collections::HashSet::new();
+    results
+        .into_iter()
+        .filter(|result| {
+            let key = btih_key(&result.magnet_link).unwrap_or_else(|| result.magnet_link.to_lowercase());
+            seen.insert(key)
+        })
+        .collect()
+}
+
+fn btih_key(magnet_link: &str) -> Option<String> {
+    let lower = magnet_link.to_lowercase();
+    let start = lower.find("urn:btih:")? + "urn:btih:".len();
+    let hash = lower[start..].split('&').next()?.trim();
+    (!hash.is_empty()).then(|| hash.to_string())
 }

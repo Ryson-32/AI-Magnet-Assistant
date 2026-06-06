@@ -51,8 +51,8 @@ The frontend code structure follows the typical organization of a Vue 3 project.
     *   **UI**: Includes a search input box, filter options (AI filtering, page count selection), sorting controls, and a results display area.
     *   **State Management**: Shares search state via the `inject` and `provide` mechanism.
     *   **Core Flow**:
-        1.  `search()`: Validates input, sets the search state, and **concurrently calls the backend** commands `search_clmclm_first` and `search_other_engines` via `invoke`.
-        2.  **Progressive Loading**: First processes and displays results from the primary engine, then merges results from other engines.
+        1.  `search()`: Validates input, sets the search state, and calls the backend command `search_multi_page` via `invoke`.
+        2.  **Concurrent Search**: The backend searches all enabled engines and requested pages concurrently, then returns deduplicated results.
         3.  `analyzeResults()`: If smart filtering is enabled, it calls `invoke('batch_analyze_resources', ...)` to send results to the backend for analysis in **parallel batches**, updating the UI with progress in real-time.
         4.  `sortResults()`: Sorts the results on the client-side based on the user-selected sorting rule.
 
@@ -82,8 +82,8 @@ The backend Rust code adopts a highly modular structure with clear responsibilit
     *   **Responsibility**: Defines the abstraction and concrete implementations for the search functionality.
     *   **Design**:
         1.  **`SearchProvider` Trait**: Defines a common search engine interface (`search` method), following the Dependency Inversion Principle for easy extension.
-        2.  **`ClmclmProvider`**: A concrete implementation of `SearchProvider` that uses `reqwest` and `scraper` to scrape data from a specific website.
-        3.  **`GenericProvider`**: Another implementation of `SearchProvider` for handling custom search engines. It integrates `LlmClient` and, when an LLM is configured, sends the entire HTML to the AI for intelligent extraction, rather than relying on fixed CSS selectors.
+        2.  **`GenericProvider`**: An implementation of `SearchProvider` for handling custom search engines. It integrates `LlmClient` and, when an LLM is configured, sends the entire HTML to the AI for intelligent extraction, rather than relying on fixed CSS selectors.
+        3.  **`ProwlarrProvider`**: Uses Prowlarr's official API, normalizes release metadata, and filters adult categories by default.
         4.  **`SearchCore`**: Encapsulates multiple `SearchProvider`s and is responsible for coordinating concurrent searches.
         5.  **`create_ai_enhanced_search_core`**: Acts as a factory function to dynamically create `SearchCore` instances based on the configuration.
 
@@ -91,7 +91,7 @@ The backend Rust code adopts a highly modular structure with clear responsibilit
     *   **Responsibility**: Encapsulates all logic for interacting with Large Language Models (LLMs).
     *   **Design**:
         1.  **`LlmClient` Trait**: Defines a unified interface for interacting with LLM services, allowing for future replacement or addition of new LLM providers.
-        2.  **`GeminiClient`**: A concrete implementation of `LlmClient` responsible for communicating with the Google Gemini API.
+        2.  **`OpenAiCompatibleClient`**: A concrete implementation used by Agnes, DeepSeek, and custom OpenAI-compatible APIs.
         3.  **Prompt Engineering**: The core value of the module lies in meticulously designed prompts that ensure the stability and reliability of the AI's output through clear role-playing, strict JSON output formats, and task decomposition.
         4.  **Error Handling and Retries**: Includes automatic retry logic for failed API calls, enhancing system robustness.
 
@@ -105,7 +105,7 @@ The backend Rust code adopts a highly modular structure with clear responsibilit
 
 Frontend-backend interaction is handled exclusively through Tauri's `invoke` API, which is a secure and efficient mechanism.
 
-1.  **Frontend Call**: In a Vue component, use the `invoke` function, passing the command name (e.g., `"search_clmclm_first"`) and a parameter object.
+1.  **Frontend Call**: In a Vue component, use the `invoke` function, passing the command name (e.g., `"search_multi_page"`) and a parameter object.
 2.  **Backend Processing**: Tauri receives the call, matches it to the corresponding `#[tauri::command]` function in `main.rs`, and deserializes the parameters into Rust types.
 3.  **Data Return**: The return value of the Rust function is serialized to JSON and returned to the frontend via a `Promise`.
 4.  **Frontend Reception**: The frontend's `invoke` call returns a `Promise`, which asynchronously receives the backend data via `await`.
@@ -113,12 +113,12 @@ Frontend-backend interaction is handled exclusively through Tauri's `invoke` API
 **Example**:
 ```typescript
 // Frontend (HomePage.vue)
-const results = await invoke("search_clmclm_first", {
+const results = await invoke("search_multi_page", {
   keyword: keyword.value,
   maxPages: maxPages.value,
 });
 ```
-This call will trigger the execution of the Rust backend's `search_clmclm_first` function and return the result to the frontend's `results` variable.
+This call will trigger the execution of the Rust backend's `search_multi_page` function and return the result to the frontend's `results` variable.
 ---
 
 ## 6. Internationalization (i18n)
@@ -205,8 +205,8 @@ This call will trigger the execution of the Rust backend's `search_clmclm_first`
     *   **UI**: 包含搜索输入框、过滤选项（AI 过滤、页数选择）、排序控件和结果展示区域。
     *   **状态管理**: 通过 `inject` 和 `provide` 机制共享搜索状态。
     *   **核心流程**:
-        1.  `search()`: 校验输入，设置搜索状态，并通过 `invoke` **并行调用后端**的 `search_clmclm_first` 和 `search_other_engines` 命令。
-        2.  **渐进式加载**: 首先处理并展示主要引擎的结果，然后合并其他引擎的结果。
+        1.  `search()`: 校验输入，设置搜索状态，并通过 `invoke` 调用后端的 `search_multi_page` 命令。
+        2.  **并发搜索**: 后端并发搜索所有启用的引擎和请求页，并返回去重结果。
         3.  `analyzeResults()`: 若启用智能过滤，则调用 `invoke('batch_analyze_resources', ...)`，将结果**并行批量**发送至后端进行分析，并实时更新UI反馈进度。
         4.  `sortResults()`: 根据用户选择的排序规则对结果进行客户端排序。
 
@@ -236,8 +236,8 @@ This call will trigger the execution of the Rust backend's `search_clmclm_first`
     *   **职责**: 定义搜索功能的抽象和具体实现。
     *   **设计**:
         1.  **`SearchProvider` Trait**: 定义了通用的搜索引擎接口（`search` 方法），遵循依赖倒置原则，便于扩展。
-        2.  **`ClmclmProvider`**: `SearchProvider` 的具体实现，使用 `reqwest` 和 `scraper` 从特定网站抓取数据。
-        3.  **`GenericProvider`**: `SearchProvider` 的另一个实现，用于处理自定义搜索引擎。它集成了 `LlmClient`，当配置了 LLM 时，将整个 HTML 发送给 AI 进行智能提取，而非依赖固定的 CSS 选择器。
+        2.  **`GenericProvider`**: `SearchProvider` 的一个实现，用于处理自定义搜索引擎。它集成了 `LlmClient`，当配置了 LLM 时，将整个 HTML 发送给 AI 进行智能提取，而非依赖固定的 CSS 选择器。
+        3.  **`ProwlarrProvider`**: 使用 Prowlarr 正式 API，标准化搜索结果，并默认过滤成人分类。
         4.  **`SearchCore`**: 封装多个 `SearchProvider`，负责协调并发搜索。
         5.  **`create_ai_enhanced_search_core`**: 作为工厂函数，根据配置动态创建 `SearchCore` 实例。
 
@@ -245,7 +245,7 @@ This call will trigger the execution of the Rust backend's `search_clmclm_first`
     *   **职责**: 封装与大型语言模型（LLM）交互的所有逻辑。
     *   **设计**:
         1.  **`LlmClient` Trait**: 定义了与 LLM 服务交互的统一接口，使得未来可以替换或增加新的 LLM 提供商。
-        2.  **`GeminiClient`**: `LlmClient` 的具体实现，负责与 Google Gemini API 通信。
+        2.  **`OpenAiCompatibleClient`**：用于 Agnes、DeepSeek 与自定义 OpenAI-compatible API 的具体实现。
         3.  **Prompt Engineering**: 模块的核心价值在于精心设计的 Prompt，通过明确的角色扮演、严格的JSON输出格式和任务分解，确保AI输出的稳定性和可靠性。
         4.  **错误处理与重试**: 包含 API 调用失败时的自动重试逻辑，增强系统健壮性。
 
@@ -259,7 +259,7 @@ This call will trigger the execution of the Rust backend's `search_clmclm_first`
 
 前后端交互完全通过 Tauri 的 `invoke` API 实现，这是一个安全且高效的机制。
 
-1.  **前端调用**: 在 Vue 组件中，使用 `invoke` 函数，并传入命令名（如 `"search_clmclm_first"`）和参数对象。
+1.  **前端调用**: 在 Vue 组件中，使用 `invoke` 函数，并传入命令名（如 `"search_multi_page"`）和参数对象。
 2.  **后端处理**: Tauri 接收调用，匹配到 `main.rs` 中对应的 `#[tauri::command]` 函数，并将参数反序列化为 Rust 类型。
 3.  **数据返回**: Rust 函数的返回值被序列化为 JSON，并通过 `Promise` 返回给前端。
 4.  **前端接收**: 前端的 `invoke` 调用返回一个 `Promise`，通过 `await` 异步接收后端数据。
@@ -267,12 +267,12 @@ This call will trigger the execution of the Rust backend's `search_clmclm_first`
 **示例**:
 ```typescript
 // 前端 (HomePage.vue)
-const results = await invoke("search_clmclm_first", {
+const results = await invoke("search_multi_page", {
   keyword: keyword.value,
   maxPages: maxPages.value,
 });
 ```
-此调用将触发 Rust 后端 `search_clmclm_first` 函数的执行，并将结果返回给前端的 `results` 变量。
+此调用将触发 Rust 后端 `search_multi_page` 函数的执行，并将结果返回给前端的 `results` 变量。
 
 ---
 

@@ -20,7 +20,8 @@
       },
       "messages": {
         "downloadStarted": "下载启动成功！",
-        "downloadFailed": "启动下载失败：{error}"
+        "downloadFailed": "启动下载失败：{error}",
+        "invalidSourceUrl": "来源网址无效或不受支持"
       }
     }
   }
